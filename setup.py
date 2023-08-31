@@ -9,8 +9,8 @@ setup(
     author_email='M.Lazecky@leeds.ac.uk',
     license='GNU-GPL3.0',
     packages=['licsar_extra'],
-    package_dir = {'licsar_extra':'python'}
-    install_requires=['numpy<2.0',
+    package_dir = {'licsar_extra':'python'},
+    install_requires = ['numpy<2.0',
 'os','glob','shutil','subprocess','re','time',
 'matplotlib','xarray','rioxarray','pandas',
 'scipy','astropy','scikit-learn','gdal>=2.4']
