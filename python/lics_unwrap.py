@@ -132,7 +132,7 @@ class UnwOptions(object):
 '''
 def cascade_unwrap(frame, pair, downtoml = 1, procdir = os.getcwd(), finalgoldstein = True,
                    only10 = True, smooth = False, thres=0.3, hgtcorr = True, defomax = 0.3,
-                   outtif = None, cliparea_geo = None, subtract_gacos = False, dolocal = False):
+                   outtif = None, cliparea_geo = None, subtract_gacos = False, dolocal = False, do_landmask=True):
     """Main function to unwrap a geocoded LiCSAR interferogram using a cascade approach.
     
     Args:
@@ -167,7 +167,7 @@ def cascade_unwrap(frame, pair, downtoml = 1, procdir = os.getcwd(), finalgoldst
     # 01/2022: updating parameters:
     ifg_mlc = process_ifg(frame, pair, procdir = procpairdir, ml = 10*downtoml, fillby = 'gauss',
             defomax = 0.3, thres = 0.4, add_resid = False, hgtcorr = hgtcorr, rampit=True, 
-            dolocal = dolocal, smooth=True, goldstein = False)
+            dolocal = dolocal, smooth=True, goldstein = False, do_landmask = do_landmask)
     if not only10:
         # do additional 5x and 3x step cascade
         for ii in [5, 3]:
@@ -175,13 +175,13 @@ def cascade_unwrap(frame, pair, downtoml = 1, procdir = os.getcwd(), finalgoldst
             print('processing cascade of ML'+str(i))
             ifg_mla = process_ifg(frame, pair, procdir = procpairdir, ml = i, fillby = 'gauss',
                     prev_ramp = ifg_mlc['unw'], defomax = 0.5, add_resid = False, hgtcorr = hgtcorr, 
-                    rampit=True,  dolocal = dolocal, goldstein = False, smooth = True)
+                    rampit=True,  dolocal = dolocal, goldstein = False, smooth = True, do_landmask = do_landmask)
             ifg_mlc = ifg_mla.copy(deep=True)
     # now do the final step
     ifg_ml = process_ifg(frame, pair, procdir = procpairdir, ml = downtoml, fillby = 'nearest',
                 prev_ramp = ifg_mlc['unw'], thres = thres, defomax = defomax, add_resid = True, 
                 hgtcorr = False, outtif=outtif, subtract_gacos = subtract_gacos, goldstein=finalgoldstein,
-                cliparea_geo = cliparea_geo,  dolocal = dolocal, smooth=smooth, specmag = True)
+                cliparea_geo = cliparea_geo,  dolocal = dolocal, smooth=smooth, specmag = True, do_landmask = do_landmask)
     elapsed_time = time.time()-starttime
     hour = int(elapsed_time/3600)
     minite = int(np.mod((elapsed_time/60),60))
@@ -321,7 +321,7 @@ def process_ifg(frame, pair, procdir = os.getcwd(),
         defomax = 0.6, hgtcorr = False, gacoscorr = True, pre_detrend = True,
         cliparea_geo = None, outtif = None, prevest = None, prev_ramp = None,
         coh2var = False, add_resid = True,  rampit=False, subtract_gacos = False, dolocal = False,
-        extweights = None, keep_coh_debug = True, keep_coh_px = 0.25):
+        extweights = None, keep_coh_debug = True, keep_coh_px = 0.25, do_landmask = True):
     """Main function to unwrap a geocoded LiCSAR interferogram. Works on JASMIN (but can be easily adapted for local use)
     
     Args:
@@ -360,7 +360,7 @@ def process_ifg(frame, pair, procdir = os.getcwd(),
         xarray.Dataset: unwrapped multilooked interferogram with additional layers
     """
     try:
-        ifg = load_ifg(frame, pair, unw=False, dolocal=dolocal)
+        ifg = load_ifg(frame, pair, unw=False, dolocal=dolocal, do_landmask = do_landmask)
     except:
         print('error in loading data')
         return False
@@ -1025,7 +1025,7 @@ def process_frame(frame = 'dummy', ml = 10, thres = 0.3, smooth = False, cascade
             export_to_tif = False, subtract_gacos = False,
             nproc = 1, dolocal = False, specmag = False, defomax = 0.3,
             use_amp_stab = False, use_coh_stab = False, use_amp_coh = False, keep_coh_debug = True,
-            freq=5405000000, gacosdir = '../GACOS'):
+            freq=5405000000, gacosdir = '../GACOS', do_landmask = True):
     """Main function to process whole LiCSAR frame (i.e. unwrap all available interferograms within the frame). Works only at JASMIN.
 
     Args:
@@ -1046,6 +1046,7 @@ def process_frame(frame = 'dummy', ml = 10, thres = 0.3, smooth = False, cascade
         subtract_gacos (boolean): switch whether to return the interferograms with GACOS being subtracted (by default, GACOS is used only to support unwrapping and would be added back)
         nproc (int): use multiprocessing (one core per interferogram), not well tested, uses pathos
         dolocal (boolean): switch to use local directory to find interferograms, rather than search for LiCSAR_public directory in JASMIN
+        do_landmask (boolean): if True, we will use GMT to prepare and use landmask if it does not exist
         
         use_amp_stab (boolean): apply amplitude stability index instead of coherence-per-interferogram for unwrapping
         use_coh_stab (boolean): apply (experimental) coherence stability index. not recommended (seems not logical to me) - worth investigating though (maybe helps against loop closure errors)
@@ -1108,7 +1109,7 @@ def process_frame(frame = 'dummy', ml = 10, thres = 0.3, smooth = False, cascade
     framewid = raster.RasterXSize
     framelen = raster.RasterYSize
     
-    if dolocal:
+    if dolocal and do_landmask:
         landmask_file = os.path.join('GEOC',frame+'.geo.landmask.tif')
         if not os.path.exists(landmask_file):
             print('preparing land mask clip')
@@ -1270,13 +1271,13 @@ def process_frame(frame = 'dummy', ml = 10, thres = 0.3, smooth = False, cascade
                         if cascade:
                             ifg_ml = cascade_unwrap(frame, pair, downtoml = ml, procdir = procdir, only10 = only10, 
                                 outtif = outtif, subtract_gacos = subtract_gacos, smooth = smooth, hgtcorr = hgtcorr, 
-                                cliparea_geo = cliparea_geo, thres = thres, finalgoldstein=goldstein, dolocal=dolocal)
+                                cliparea_geo = cliparea_geo, thres = thres, finalgoldstein=goldstein, dolocal=dolocal, do_landmask=do_landmask)
                         else:
                             ifg_ml = process_ifg(frame, pair, procdir = procdir, ml = ml, hgtcorr = hgtcorr, fillby = 'nearest',   # nov 2022, orig was gauss
                                 thres = thres, defomax = defomax, add_resid = True, outtif = outtif, extweights = extweights, smooth = smooth,
                                 lowpass=lowpass, goldstein=goldstein, specmag = specmag,
                                 keep_coh_debug = keep_coh_debug, gacoscorr = gacoscorr, cliparea_geo = cliparea_geo,
-                                subtract_gacos = subtract_gacos, dolocal=dolocal)
+                                subtract_gacos = subtract_gacos, dolocal=dolocal, do_landmask = do_landmask)
                     else:
                         phatif=os.path.join(geoifgdir, pair, pair+'.geo.'+ext+'.tif')
                         cohtif=os.path.join(geoifgdir, pair, pair+'.geo.cc.tif')
@@ -1712,7 +1713,7 @@ def load_from_tifs(phatif, cohtif, landmask_tif = None, cliparea_geo = None):
     return ifg
 
 
-def load_ifg(frame, pair, unw=True, dolocal=False, mag=True, cliparea_geo = None, ext = 'diff_pha'):
+def load_ifg(frame, pair, unw=True, dolocal=False, mag=True, cliparea_geo = None, ext = 'diff_pha', do_landmask = True):
     if dolocal:
         geoifgdir = os.path.join('GEOC',pair)
         geoepochsdir = 'GEOC.MLI'
@@ -1746,7 +1747,7 @@ def load_ifg(frame, pair, unw=True, dolocal=False, mag=True, cliparea_geo = None
     incoh.values = incoh.values/255
     inmask = incoh.copy(deep=True)
     inmask.values = np.byte(incoh > 0)
-    if os.path.exists(landmask_file):
+    if do_landmask and os.path.exists(landmask_file):
         landmask = load_tif2xr(landmask_file)
         #landmask = xr.open_dataset(landmasknc)
         inmask.values = landmask.values * inmask.values
