@@ -1083,18 +1083,20 @@ def process_frame(frame = 'dummy', ml = 10, thres = 0.3, smooth = False, cascade
     if dolocal:
         geoifgdir = 'GEOC'
         if not os.path.exists(geoifgdir):
-            print('ERROR: the GEOC directory does not exist, cancelling')
-            return False
-        hgtfile = glob.glob('GEOC/*.geo.hgt.tif')
+            geoifgdir = '../GEOC'
+            if not os.path.exists(geoifgdir):
+                print('ERROR: the GEOC directory does not exist, cancelling')
+                return False
+        hgtfile = glob.glob(geoifgdir+'/*.geo.hgt.tif')
         try:
             hgtfile=hgtfile[0]
         except:
             print('ERROR: GEOC/*.geo.hgt.tif is not existing, cancelling (although might just avoid it?)')
             print('please generate this file first - tip: use gdal2warp.py $anydem.tif $anygoodfile.tif GEOC/any.geo.hgt.tif')
             return False
-        efile = glob.glob('GEOC/*.geo.E.tif')
-        nfile = glob.glob('GEOC/*.geo.N.tif')
-        ufile = glob.glob('GEOC/*.geo.U.tif')
+        efile = glob.glob(geoifgdir+'/*.geo.E.tif')
+        nfile = glob.glob(geoifgdir+'/*.geo.N.tif')
+        ufile = glob.glob(geoifgdir+'/*.geo.U.tif')
         try:
             efile=efile[0]
             ufile=ufile[0]
@@ -1115,7 +1117,7 @@ def process_frame(frame = 'dummy', ml = 10, thres = 0.3, smooth = False, cascade
     framelen = raster.RasterYSize
     
     if dolocal and do_landmask:
-        landmask_file = os.path.join('GEOC',frame+'.geo.landmask.tif')
+        landmask_file = os.path.join(geoifgdir,frame+'.geo.landmask.tif')
         if not os.path.exists(landmask_file):
             print('preparing land mask clip')
             landmask_frame = os.path.join(geoframedir,'metadata',frame+'.geo.landmask.tif')
@@ -1723,17 +1725,23 @@ def load_from_tifs(phatif, cohtif, landmask_tif = None, cliparea_geo = None):
 
 def load_ifg(frame, pair, unw=True, dolocal=False, mag=True, cliparea_geo = None, ext = 'diff_pha', do_landmask = True):
     if dolocal:
-        geoifgdir = os.path.join('GEOC',pair)
-        geoepochsdir = 'GEOC.MLI'
+        geoifgdir = 'GEOC'
+        if not os.path.exists(geoifgdir):
+            geoifgdir = '../GEOC'
+            if not os.path.exists(geoifgdir):
+                print('ERROR: the GEOC directory does not exist, cancelling')
+                return False
+        geoifgdir = os.path.join(geoifgdir,pair)
+        geoepochsdir = geoifgdir+'.MLI'
         try:
-            hgtfile = glob.glob('GEOC/*.geo.hgt.tif')[0]
+            hgtfile = glob.glob(geoifgdir+'/*.geo.hgt.tif')[0]
         except:
             hgtfile = 'noex'
         try:
-            Ufile = glob.glob('GEOC/*.geo.U.tif')[0]
+            Ufile = glob.glob(geoifgdir+'/*.geo.U.tif')[0]
         except:
             Ufile = 'noex'
-        landmask_file = os.path.join('GEOC',frame+'.geo.landmask.tif')
+        landmask_file = os.path.join(geoifgdir,frame+'.geo.landmask.tif')
         #print('debug l 1662: using U')
     else:
         pubdir = os.environ['LiCSAR_public']
