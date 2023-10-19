@@ -548,6 +548,7 @@ def process_ifg_core(ifg, tmpdir = os.getcwd(),
         ifg = ifg.rename_dims({'x':'lon','y':'lat'})
     # now crop if needed:
     if cliparea_geo:
+        '''
         minclipx, maxclipx, minclipy, maxclipy = cliparea_geo.split('/')
         minclipx, maxclipx, minclipy, maxclipy = float(minclipx), float(maxclipx), float(minclipy), float(maxclipy)
         if minclipy > maxclipy:
@@ -560,12 +561,15 @@ def process_ifg_core(ifg, tmpdir = os.getcwd(),
             tmpcl = minclipx
             minclipx=maxclipx
             maxclipx=tmpcl
-        # now will clip it - lat is opposite-sorted, so need to slice from max to min in y ... plus 10 pixels on all sides
+        # now will clip it - lat is opposite-sorted, so need to slice from max to min in y ... plus 10 (or just.. ml factor) pixels on all sides
         resdeg = get_resolution(ifg, in_m=False)
-        ifg = ifg.sel(lon=slice(minclipx-10*resdeg, maxclipx+10*resdeg), lat=slice(maxclipy+10*resdeg, minclipy-10*resdeg))
+        ifg = ifg.sel(lon=slice(minclipx-ml*resdeg, maxclipx+ml*resdeg), lat=slice(maxclipy+ml*resdeg, minclipy-ml*resdeg))
+        '''
+        ifg = clip_xr(ifg, cliparea_geo, pxborder=ml)
         # not the best here, as pixels might get slightly shifted, but perhaps not that big deal (anyway prev_ramp is 'blurred')
         if not type(prev_ramp) == type(None):
-            prev_ramp = prev_ramp.sel(lon=slice(minclipx-10*resdeg, maxclipx+10*resdeg), lat=slice(maxclipy+10*resdeg, minclipy-10*resdeg))
+            prev_ramp = clip_xr(prev_ramp, cliparea_geo, pxborder=ml)
+            #prev_ramp = prev_ramp.sel(lon=slice(minclipx-ml*resdeg, maxclipx+ml*resdeg), lat=slice(maxclipy+ml*resdeg, minclipy-ml*resdeg))
     #WARNING - ONLY THIS FUNCTION HAS GACOS INCLUDED NOW! (and heights fix!!!)
     # resultant 'pha' is after the removal of the 'toremove' (unw) phase
     if type(prevest) != type(None):
@@ -973,7 +977,8 @@ def process_ifg_core(ifg, tmpdir = os.getcwd(),
     #    ifg_ml['unw'] = ifg_ml['unw'].where(ifg_ml.mask_full>0)
     # finally clip again, without border pixels:
     if cliparea_geo:
-        ifg_ml = ifg_ml.sel(lon=slice(minclipx, maxclipx), lat=slice(maxclipy, minclipy))
+        #ifg_ml = ifg_ml.sel(lon=slice(minclipx, maxclipx), lat=slice(maxclipy, minclipy))
+        ifg_ml = clip_xr(ifg_ml, cliparea_geo, pxborder=0)
     if add_resid:
         # 2022-04-04 - fixing for final residuals - without unwrapping them - in case the unw had some spatially propagating error
         # BUT ALSO the 'weird vertical lines' sometimes induced after snaphu unwrapping. those lines have, however, values very close to 0, but not 0
@@ -1380,10 +1385,13 @@ def get_ml_hgt(hgtfile, ml=1, cliparea_geo = None):
     #hgtfile = os.path.join(geoframedir, 'metadata', frame + '.geo.hgt.tif')
     hgt = load_tif2xr(hgtfile)
     if ml>1:
+        if cliparea_geo:
+            hgt = clip_xr(hgt, cliparea_geo, pxborder=ml) # debug, to match exactly the ifg
         hgt = hgt.coarsen({'lat': ml, 'lon': ml}, boundary='trim').mean()
     if cliparea_geo:
-        minclipx, maxclipx, minclipy, maxclipy = cliparea_geo2coords(cliparea_geo)
-        hgt = hgt.sel(lon=slice(minclipx, maxclipx), lat=slice(maxclipy, minclipy))
+        #minclipx, maxclipx, minclipy, maxclipy = cliparea_geo2coords(cliparea_geo)
+        #hgt = hgt.sel(lon=slice(minclipx, maxclipx), lat=slice(maxclipy, minclipy))
+        hgt = clip_xr(hgt, cliparea_geo, pxborder=0) # debug, to match exactly the ifg
     return hgt
 
 
@@ -3747,6 +3755,25 @@ def get_costs(edges, n_edge, rowix, colix, zeroix):
     return rowcost, colcost
 
 
+def clip_xr(xar, cliparea_geo, pxborder=0):
+    if 'lat' not in xar.coords:
+        print('warning - perhaps old xarray version - trying anyway')
+        xar = xar.rename_dims({'x':'lon','y':'lat'})
+    minclipx, maxclipx, minclipy, maxclipy = cliparea_geo.split('/')
+    minclipx, maxclipx, minclipy, maxclipy = float(minclipx), float(maxclipx), float(minclipy), float(maxclipy)
+    if minclipy > maxclipy:
+        print('you switched min max in crop coordinates (latitude). fixing')
+        tmpcl = minclipy
+        minclipy=maxclipy
+        maxclipy=tmpcl
+    if minclipx > maxclipx:
+        print('you switched min max in crop coordinates (longitude). fixing')
+        tmpcl = minclipx
+        minclipx=maxclipx
+        maxclipx=tmpcl
+    resdeg = get_resolution(xar, in_m=False)
+    xar=xar.sel(lon=slice(minclipx-pxborder*resdeg, maxclipx+pxborder*resdeg), lat=slice(maxclipy+pxborder*resdeg, minclipy-pxborder*resdeg))
+    return xar
 
 #### extra functions (not used in the workflow, but considered useful!)
 
