@@ -456,7 +456,7 @@ def process_ifg_pair(phatif, cohtif, procpairdir = os.getcwd(),
         extweights = None, keep_coh_debug = True, keep_coh_px = 0.25, cascade = False):
     """Process pair data from their geotiffs (phase and coherence)"""
     try:
-        ifg = load_from_tifs(phatif, cohtif, landmask_tif = None, cliparea_geo = cliparea_geo)
+        ifg = load_from_tifs(phatif, cohtif, landmask_tif = None) #, cliparea_geo = cliparea_geo) # do not clip here, it will be done later!
     except:
         print('error in loading data')
         return False
