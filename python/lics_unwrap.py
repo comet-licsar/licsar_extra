@@ -1583,35 +1583,39 @@ def multilook_normalised(ifg, ml = 10, tmpdir = os.getcwd(), hgtcorr = True,
         print('calculating correlation with DEM')
         try:
             toremove_hgt = remove_height_corr(ifg_ml, tmpdir = tmpdir, dounw = True, nonlinear=False)
-            pha_no_hgt = wrap2phase(ifg_ml['pha'] - toremove_hgt)
-            cpx_no_hgt = magpha2RI_array(np.abs(ifg_ml.cpx.values), pha_no_hgt) #del
-            #if np.nanstd(pha_no_hgt) >= np.nanstd(ifg_ml.pha.values):
-            #    print('but the correction would increase overall phase std - dropping')
-            #    hgtcorr = False
-            if np.nanstd(cpx_no_hgt) >= np.nanstd(ifg_ml.cpx.values):
-                #print('but the correction would increase overall complex std - dropping')
-                print('warning, the heights correction would increase overall complex std by '+str(np.nanstd(cpx_no_hgt)-np.nanstd(ifg_ml.cpx.values))+' - might be worse then? (checking with coh change)') #nanstd is really bad for this
-                #hgtcorr = False
-            ###
-            origphanp = ifg_ml.pha.where(ifg_ml.mask > 0).values  # keep
-            # 2023/05: use just coh diff:
-            cohchange = coh_change(origphanp, pha_no_hgt)
-            cohchangeval = np.nanmean(cohchange)
-            if cohchangeval < 0:
-                print('the heights correction would decrease avg coh by ' + str(cohchangeval) + '. Skipping.')
+            if toremove_hgt.min() == 0:
+                # in this case there was some error (output full of zeroes)
+                print('hgt correlation was skipped')
             else:
-                ifg_ml['toremove'] = ifg_ml['toremove'] + toremove_hgt
-                # need to remove hgt only here, as the 'toremove' was already removed before..
-                ifg_ml['pha'].values = pha_no_hgt
-                ifg_ml['pha'] = ifg_ml['pha'].where(ifg_ml.mask>0)
-                #ok, return coh, phase back to cpx
-                cpxa = magpha2RI_array(ifg_ml.coh.values, ifg_ml.pha.values)
-                ifg_ml['cpx'].values = cpxa
-            if pre_detrend:
-                ifg_ml['cpx'], correction = detrend_ifg_xr(ifg_ml['cpx'], isphase=False, return_correction = True)
-                ifg_ml['pha'].values = np.angle(ifg_ml.cpx)
-                ifg_ml['pha'] = ifg_ml['pha'].where(ifg_ml.mask>0)
-                ifg_ml['toremove'] = ifg_ml['toremove'] + correction
+                pha_no_hgt = wrap2phase(ifg_ml['pha'] - toremove_hgt)
+                cpx_no_hgt = magpha2RI_array(np.abs(ifg_ml.cpx.values), pha_no_hgt) #del
+                #if np.nanstd(pha_no_hgt) >= np.nanstd(ifg_ml.pha.values):
+                #    print('but the correction would increase overall phase std - dropping')
+                #    hgtcorr = False
+                if np.nanstd(cpx_no_hgt) >= np.nanstd(ifg_ml.cpx.values):
+                    #print('but the correction would increase overall complex std - dropping')
+                    print('warning, the heights correction would increase overall complex std by '+str(np.nanstd(cpx_no_hgt)-np.nanstd(ifg_ml.cpx.values))+' - might be worse then? (checking with coh change)') #nanstd is really bad for this
+                    #hgtcorr = False
+                ###
+                origphanp = ifg_ml.pha.where(ifg_ml.mask > 0).values  # keep
+                # 2023/05: use just coh diff:
+                cohchange = coh_change(origphanp, pha_no_hgt)
+                cohchangeval = np.nanmean(cohchange)
+                if cohchangeval < 0:
+                    print('the heights correction would decrease avg coh by ' + str(cohchangeval) + '. Skipping.')
+                else:
+                    ifg_ml['toremove'] = ifg_ml['toremove'] + toremove_hgt
+                    # need to remove hgt only here, as the 'toremove' was already removed before..
+                    ifg_ml['pha'].values = pha_no_hgt
+                    ifg_ml['pha'] = ifg_ml['pha'].where(ifg_ml.mask>0)
+                    #ok, return coh, phase back to cpx
+                    cpxa = magpha2RI_array(ifg_ml.coh.values, ifg_ml.pha.values)
+                    ifg_ml['cpx'].values = cpxa
+                if pre_detrend:
+                    ifg_ml['cpx'], correction = detrend_ifg_xr(ifg_ml['cpx'], isphase=False, return_correction = True)
+                    ifg_ml['pha'].values = np.angle(ifg_ml.cpx)
+                    ifg_ml['pha'] = ifg_ml['pha'].where(ifg_ml.mask>0)
+                    ifg_ml['toremove'] = ifg_ml['toremove'] + correction
         except:
             print('some error trying correlate with DEM. continuing without it')
     # maybe not the best, but have gacos correction inside the toremove variable
@@ -2584,10 +2588,15 @@ def remove_height_corr(ifg_ml, corr_thres = 0.5, tmpdir = os.getcwd(), dounw = T
             if 'U' in ifg_mlc:
                 # returning the values back to slant look
                 thisisit = thisisit / ifg_mlc['U'] #np.cos(ifg_mlc['inc'])  # return to LOS from 'vertical'
+            ifg_mlc['toremove'].values = thisisit * ifg_mlc['hgt']
         else:
-            print('using hgt correlation grid to reduce hgt component')
-            # should be then in LOS...
-        ifg_mlc['toremove'].values = thisisit*ifg_mlc['hgt']
+            if nonlinear:
+                print('using hgt correlation grid to reduce hgt component')
+                # should be then already in LOS...
+                ifg_mlc['toremove'].values = thisisit*ifg_mlc['hgt']
+            else:
+                print('an error occurred during hgt corr - perhaps not enough good pixels to derive the hgt x pha slope')
+                ifg_mlc['toremove'].values = 0
     return ifg_mlc['toremove']
 
 
