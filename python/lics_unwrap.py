@@ -1727,7 +1727,7 @@ def load_from_tifs(phatif, cohtif, landmask_tif = None, cliparea_geo = None):
     return ifg
 
 
-def load_ifg(frame, pair, unw=True, dolocal=False, mag=True, cliparea_geo = None, ext = 'diff_pha', do_landmask = True):
+def load_ifg(frame, pair, unw=True, dolocal=False, mag=True, cliparea_geo = None, do_landmask = True):
     if dolocal:
         geoifgdir = 'GEOC'
         if not os.path.exists(geoifgdir):
@@ -1757,8 +1757,12 @@ def load_ifg(frame, pair, unw=True, dolocal=False, mag=True, cliparea_geo = None
         #print('debug l 1667: using U')
         landmask_file = os.path.join(geoframedir,'metadata',frame+'.geo.landmask.tif')
     #orig files
-    # will use only the filtered ifgs now..
-    ifg_pha_file = os.path.join(geoifgdir,pair+'.geo.'+ext+'.tif')
+    ext = 'diff_unfiltered_pha'
+    ifg_pha_file = os.path.join(geoifgdir, pair + '.geo.' + ext + '.tif')
+    if not os.path.exists(ifg_pha_file):
+        ext = 'diff_pha'
+        # will use only the filtered ifgs now..
+        ifg_pha_file = os.path.join(geoifgdir,pair+'.geo.'+ext+'.tif')
     coh_file = os.path.join(geoifgdir,pair+'.geo.cc.tif')
     #landmask_file = os.path.join(geoframedir,'metadata',frame+'.geo.landmask.tif')
     # load the files
