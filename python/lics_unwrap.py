@@ -448,13 +448,50 @@ for p in pairs:
 
 
 def process_ifg_pair(phatif, cohtif, procpairdir = os.getcwd(),
-        ml = 10, fillby = 'gauss', thres = 0.2, 
+        ml = 10, fillby = 'gauss', thres = 0.2, cascade = False, 
         smooth = False, lowpass = True, goldstein = True, specmag = False,
         defomax = 0.6, hgtcorr = False, gacoscorr = True, pre_detrend = True,
         cliparea_geo = None, outtif = None, prevest = None, prev_ramp = None,
         coh2var = False, add_resid = True,  rampit=False, subtract_gacos = False,
-        extweights = None, keep_coh_debug = True, keep_coh_px = 0.25, cascade = False):
-    """Process pair data from their geotiffs (phase and coherence)"""
+        extweights = None, keep_coh_debug = True, keep_coh_px = 0.25):
+    """Process pair data from their geotiffs (phase and coherence)
+    Args:
+        phatif (string): path to the input wrapped interferogram geotiff (recommended unfiltered version)
+        cohtif (string): path to the input coherence geotiff
+        procdir (string): path to processing directory (here, this will create subdirectory of *pair* and use this to generate result)
+        
+        ml (int): multilooking factor used to reduce the interferogram in lon/lat
+        fillby (string): algorithm to fill gaps. use one of values: ``'gauss'``, ``'nearest'``, ``'none'`` (where ``'none'`` would only fill NaNs by zeroes)
+        thres (float): threshold between 0-1 for gaussian-based coherence-like measure (spatial phase consistence?); higher number - more is masked prior to unwrapping
+        cascade (boolean): whether to use the multiscale/cascade approach
+        
+        smooth (boolean): switch to use extra Gaussian filtering for 2-pass unwrapping (not recommended anymore)
+        lowpass (boolean): additional large-window Gaussian low-pass filtering (recommended to use)
+        goldstein (boolean): use Goldstein filter (recommended to use, but might slow down the procedure)
+        specmag (boolean): use spectral magnitude of the Goldstein filter (if it is on) as an experimental measure of coherence
+        defomax (float): parameter to snaphu for maximum deformation in rad per 2pi cycle (DEFOMAX_CYCLE)
+        
+        hgtcorr (boolean): switch to perform correction for height-phase correlation
+        gacoscorr (boolean): switch to apply GACOS corrections (if detected)
+        pre_detrend (boolean): switch to apply detrending on wrapped phase to support unwrapping
+        
+        cliparea_geo (string or None): use GMT/LiCSBAS string to identify area to clip, in geo-coordinates, as ``'lon1/lon2/lat1/lat2'``
+        outtif (string or None): path to geotiff file to export result to.
+        prevest (xarray.DataArray or None): a previous rough estimate to be used by snaphu as the ESTFILE
+        prev_ramp (xarray.DataArray or None): a previous estimate or a ramp that will be removed prior to unwrapping (and added back)
+        
+        coh2var (boolean): convert coherence to variance for weighting. now used wrongly, for experimentation - please avoid
+        add_resid (boolean): switch to add back residuals from spatially filtered unwrapping (makes sense if smooth is ON)
+        rampit (boolean): perform an extra strong gaussian filter to get a very rough unwrapping result. basically a longwave signal ramp. used by cascade approach
+        subtract_gacos (boolean): switch whether to return the interferograms with GACOS being subtracted (by default, GACOS is used only to support unwrapping and would be added back)
+        
+        extweights (xr.DataArray): external weights, e.g. amplitude stability or coherence ratio (or another array) to be used for weighting the phase instead of the original coherence
+        keep_coh_debug (boolean): only in combination with use_coh_stab or use_amp_stab - whether or not to keep original (downsampled) ifg coherence after using the amp/coh_stab to weight the phase during multilooking
+        keep_coh_px (float or None): threshold for coherence upon which pixels would be unmasked (default: 0.25, use None or False to not add back coherent pixels). Practically, we mask based on consistence and then unmask coherent pixels.
+    
+    Returns:
+        xarray.Dataset: unwrapped multilooked interferogram with additional layers
+    """
     try:
         ifg = load_from_tifs(phatif, cohtif, landmask_tif = None) #, cliparea_geo = cliparea_geo) # do not clip here, it will be done later!
     except:
