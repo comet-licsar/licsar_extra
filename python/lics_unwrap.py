@@ -3585,6 +3585,7 @@ def build_amp_avg_std(frame, return_ampstab = False, intensity=False):
     if return_ampstab:
         ampstab = 1 - ampstd/ampavg
         ampstab.values[ampstab<=0] = 0.00001
+        ampstab = 1 - ampstab
         return ampstab
     else:
         return ampavg, ampstd
