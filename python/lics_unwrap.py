@@ -1191,6 +1191,7 @@ def process_frame(frame = 'dummy', ml = 10, thres = 0.3, smooth = False, cascade
                 ampavg, ampstd = build_amp_avg_std(frame)
                 ampstab = 1 - ampstd/ampavg
                 ampstab.values[ampstab<=0] = 0.00001
+                ampstab = 1 - ampstab  # need to calc here as for use_amp_coh we need the avgs..
                 if not os.path.exists(ampstabfile):
                     ampstab.to_netcdf(ampstabfile)
                 extweights = ampstab
@@ -1209,16 +1210,17 @@ def process_frame(frame = 'dummy', ml = 10, thres = 0.3, smooth = False, cascade
                 cohratio = xr.open_dataarray(cohratiofile)
             else:
                 cohavg, cohstd = build_coh_avg_std(frame, days = cohstabdays, monthly = False)
-                # ok, original coh_stab = 1 - coh_dispersion, i.e.:
-                cohratio = 1 - cohstd/cohavg
-                cohratio.values[cohratio<=0] = 0.00001
-                if not os.path.exists(cohratiofile):
-                    print('storing DQ=1-cohstd/cohavg to '+cohratiofile)
-                    cohratio.to_netcdf(cohratiofile)
-                # but i want now to have it logarithmic, so:
-                #cohratio = cohavg/cohstd
-                #hmm... not really any difference. so using the orig way
-                extweights = cohratio
+                if not use_amp_coh:
+                    # ok, original coh_stab = 1 - coh_dispersion, i.e.:
+                    cohratio = 1 - cohstd/cohavg
+                    cohratio.values[cohratio<=0] = 0.00001
+                    if not os.path.exists(cohratiofile):
+                        print('storing DQ=1-cohstd/cohavg to '+cohratiofile)
+                        cohratio.to_netcdf(cohratiofile)
+                    # but i want now to have it logarithmic, so:
+                    #cohratio = cohavg/cohstd
+                    #hmm... not really any difference. so using the orig way
+                    extweights = cohratio
         except:
             print('some error happened, disabling use of coh stability')
             use_coh_stab = False
