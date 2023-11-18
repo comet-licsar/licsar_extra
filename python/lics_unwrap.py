@@ -1171,20 +1171,28 @@ def process_frame(frame = 'dummy', ml = 10, thres = 0.3, smooth = False, cascade
     #    hgt = xr.open_dataarray(hgtfile)
     extweights = None
     if use_amp_coh:
-        use_coh_stab = True
-        use_amp_stab = True #just to calculate it...
+        ampcohfile = frame + '_ampcoh.nc'
+        if os.path.exists(ampcohfile):
+            ampcoh = xr.open_dataarray(ampcohfile)
+            use_coh_stab = False
+            use_amp_stab = False
+        else:
+            #calculate it
+            use_coh_stab = True
+            use_amp_stab = True
     if use_amp_stab:
         print('calculating amplitude stability')
         try:
             ampstabfile = frame+'_ampstab.nc'
-            if os.path.exists(ampstabfile):
+            if (use_amp_coh == False) and os.path.exists(ampstabfile):
                 print('using existing ampstabfile')
                 ampstab = xr.open_dataarray(ampstabfile)
             else:
                 ampavg, ampstd = build_amp_avg_std(frame)
                 ampstab = 1 - ampstd/ampavg
                 ampstab.values[ampstab<=0] = 0.00001
-                ampstab.to_netcdf(ampstabfile)
+                if not os.path.exists(ampstabfile):
+                    ampstab.to_netcdf(ampstabfile)
                 extweights = ampstab
         except:
             print('some error happened, disabling use of amplitude stability')
@@ -1192,11 +1200,11 @@ def process_frame(frame = 'dummy', ml = 10, thres = 0.3, smooth = False, cascade
     if use_coh_stab:
         if use_amp_stab:
             print('warning, you just computed amplitude stability but you flagged to use coh_stab that will then be applied instead of ampstab. perhaps you want turn this off?')
-        cohstabdays = 12
+        cohstabdays = 12 # TODO: needs auto-identify max here!!!!
         print('calculating coherence stability, using only {} days coherences'.format(str(cohstabdays)))
         try:
             cohratiofile = frame+'_cohratio.nc'
-            if os.path.exists(cohratiofile):
+            if (use_amp_coh == False) and os.path.exists(cohratiofile):
                 print('using existing cohratiofile')
                 cohratio = xr.open_dataarray(cohratiofile)
             else:
@@ -1204,8 +1212,9 @@ def process_frame(frame = 'dummy', ml = 10, thres = 0.3, smooth = False, cascade
                 # ok, original coh_stab = 1 - coh_dispersion, i.e.:
                 cohratio = 1 - cohstd/cohavg
                 cohratio.values[cohratio<=0] = 0.00001
-                print('storing DQ=1-cohstd/cohavg to '+cohratiofile)
-                cohratio.to_netcdf(cohratiofile)
+                if not os.path.exists(cohratiofile):
+                    print('storing DQ=1-cohstd/cohavg to '+cohratiofile)
+                    cohratio.to_netcdf(cohratiofile)
                 # but i want now to have it logarithmic, so:
                 #cohratio = cohavg/cohstd
                 #hmm... not really any difference. so using the orig way
@@ -1213,8 +1222,13 @@ def process_frame(frame = 'dummy', ml = 10, thres = 0.3, smooth = False, cascade
         except:
             print('some error happened, disabling use of coh stability')
             use_coh_stab = False
+            use_amp_coh = False
     if use_amp_coh:
-        ampcoh = cohavg * ampavg
+        if not os.path.exists(ampcohfile):
+            # calculate it (if so, it would have been already loaded)
+            ampcoh = cohavg * ampavg
+            #ampcohfile = frame + '_ampcoh.nc'
+            ampcoh.to_netcdf(ampcohfile)
         extweights = ampcoh
         cohratio = None
         cohstd = None
@@ -1224,6 +1238,7 @@ def process_frame(frame = 'dummy', ml = 10, thres = 0.3, smooth = False, cascade
         ampavg = None
         use_coh_stab = False
         use_amp_stab = False
+    # TODO(?): nullifying ext weights based on some well-defined treshold (aka PS-SB approach....)
     pairset = None
     if pairsetfile:
         try:
