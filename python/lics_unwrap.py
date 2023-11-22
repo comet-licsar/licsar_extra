@@ -387,6 +387,7 @@ def process_ifg(frame, pair, procdir = os.getcwd(),
                 ifg['gacos'].values = gacosdiff.values
             except:
                 ifg['gacos'] = gacosdiff.interp_like(ifg['gacos'] ,method='nearest')
+            gacosdiff = None
         else:
             gacoscorr = False
     
