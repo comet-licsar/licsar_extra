@@ -668,7 +668,8 @@ def process_ifg_core(ifg, tmpdir = os.getcwd(),
         maxpx = 16 * 16
         pixels = int(round(lenthres / mlres))
         pixelsno = min(pixels ** 2, maxpx)
-        spmask=remove_islands(npa, pixelsno)
+        if type(extweights) == type(None):
+            spmask=remove_islands(npa, pixelsno)
         #delta = np.angle(np.exp(1j*(ifg_ml['filtpha'] - ifg_ml['pha'])))
         #mask = np.abs(delta<1)*1
         ifg_ml['mask_filt'] = ifg_ml['mask_extent']
@@ -758,7 +759,8 @@ def process_ifg_core(ifg, tmpdir = os.getcwd(),
         #pixelsno = 7*7
         npa = ifg_ml['mask_coh'].where(ifg_ml['mask_coh']==1).where(ifg_ml['mask']==1).values
         ifg_ml['mask_full'] = ifg_ml['mask_coh']
-        ifg_ml['mask_full'].values = remove_islands(npa, pixelsno)
+        if type(extweights) == type(None):
+            ifg_ml['mask_full'].values = remove_islands(npa, pixelsno)
         ifg_ml['mask_full'] = ifg_ml['mask_full'].fillna(0).astype(np.int8)
         #ifg_ml['mask_coh'] = ifg_ml['mask'].where(ifg_ml.gauss_coh > thres).where(ifg_ml.coh > thres).fillna(0)
     #if lowpass:
