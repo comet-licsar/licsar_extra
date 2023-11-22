@@ -167,7 +167,7 @@ def cascade_unwrap(frame, pair, downtoml = 1, procdir = os.getcwd(), finalgoldst
     # 01/2022: updating parameters:
     ifg_mlc = process_ifg(frame, pair, procdir = procpairdir, ml = 10*downtoml, fillby = 'gauss',
             defomax = 0.3, thres = 0.4, add_resid = False, hgtcorr = hgtcorr, rampit=True, 
-            dolocal = dolocal, smooth=True, goldstein = False, do_landmask = do_landmask)
+            dolocal = dolocal, smooth=True, goldstein = False, specmag = False, do_landmask = do_landmask)
     if not only10:
         # do additional 5x and 3x step cascade
         for ii in [5, 3]:
@@ -175,7 +175,7 @@ def cascade_unwrap(frame, pair, downtoml = 1, procdir = os.getcwd(), finalgoldst
             print('processing cascade of ML'+str(i))
             ifg_mla = process_ifg(frame, pair, procdir = procpairdir, ml = i, fillby = 'gauss',
                     prev_ramp = ifg_mlc['unw'], defomax = 0.5, add_resid = False, hgtcorr = hgtcorr, 
-                    rampit=True,  dolocal = dolocal, goldstein = False, smooth = True, do_landmask = do_landmask)
+                    rampit=True,  dolocal = dolocal, goldstein = False, specmag = False, smooth = True, thres = 0.2, do_landmask = do_landmask)
             ifg_mlc = ifg_mla.copy(deep=True)
     # now do the final step
     ifg_ml = process_ifg(frame, pair, procdir = procpairdir, ml = downtoml, fillby = 'nearest',
@@ -540,8 +540,8 @@ def process_ifg_pair(phatif, cohtif, procpairdir = os.getcwd(),
 
 
 def process_ifg_core(ifg, tmpdir = os.getcwd(), 
-        ml = 10, fillby = 'gauss', thres = 0.2, smooth = False, lowpass = True,
-        goldstein = True, specmag = False,
+        ml = 10, fillby = 'nearest', thres = 0.35, smooth = False, lowpass = True,
+        goldstein = True, specmag = True,
         defomax = 0.6, hgtcorr = False, gacoscorr = True, pre_detrend = True,
         cliparea_geo = None, outtif = None, prevest = None, prev_ramp = None,
         coh2var = False, add_resid = True,  rampit=False, subtract_gacos = False,
