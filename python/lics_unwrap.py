@@ -375,7 +375,7 @@ def process_ifg(frame, pair, procdir = os.getcwd(),
     
     # do gacos if exists
     if gacoscorr:
-        gacosdiff = make_gacos_correction(frame,pair)
+        gacosdiff = make_gacos_correction(frame,pair,dolocal)
         if not type(gacosdiff) == type(False):
             print('GACOS data found, using to improve unwrapping')
             ifg['gacos'] = ifg.pha
@@ -2536,23 +2536,34 @@ def make_snaphu_conf(sdir, defomax = 1.2):
     return snaphuconffile
 
 
-def make_gacos_correction(frame, pair):
+def make_gacos_correction(frame, pair, dolocal = False):
     """Creates GACOS correction for the interferogram. works only at JASMIN
     
     Args:
         frame (string): frame ID
         pair (string): pair ID (e.g. '20201001_20201201')
+        dolocal (boolean): if True, it checks local GACOS dir
     
     Returns:
         xr.DataArray (GACOS correction), or False
     """
     print('preparing GACOS correction')
-    pubdir = os.environ['LiCSAR_public']
-    geoframedir = os.path.join(pubdir,str(int(frame[:3])),frame)
     epoch1 = pair.split('_')[0]
     epoch2 = pair.split('_')[1]
-    gacos1 = os.path.join(geoframedir,'epochs',epoch1,epoch1+'.sltd.geo.tif')
-    gacos2 = os.path.join(geoframedir,'epochs',epoch2,epoch2+'.sltd.geo.tif')
+    if dolocal:
+        gacosdir = 'GACOS'
+        if not os.path.exists(gacosdir):
+            geoifgdir = '../GACOS'
+            if not os.path.exists(gacosdir):
+                print('ERROR: the GACOS directory does not exist in local folder. trying find in LiCSAR db')
+                dolocal = False
+        gacos1 = os.path.join(gacosdir,epoch1,epoch1+'.sltd.geo.tif')
+        gacos2 = os.path.join(gacosdir,epoch2,epoch2+'.sltd.geo.tif')
+    if not dolocal:
+        pubdir = os.environ['LiCSAR_public']
+        geoframedir = os.path.join(pubdir,str(int(frame[:3])),frame)
+        gacos1 = os.path.join(geoframedir,'epochs',epoch1,epoch1+'.sltd.geo.tif')
+        gacos2 = os.path.join(geoframedir,'epochs',epoch2,epoch2+'.sltd.geo.tif')
     if os.path.exists(gacos1) and os.path.exists(gacos2):
         try:
             gacos1 = load_tif2xr(gacos1)
