@@ -1129,7 +1129,7 @@ def process_frame(frame = 'dummy', ml = 10, thres = 0.3, smooth = False, cascade
             elif os.path.exists('../GACOS'):
                 gacosdir = '../GACOS'
             else:
-                print('no gacos folder exists - turning GACOS support OFF'
+                print('no gacos folder exists - turning GACOS support OFF')
                 gacoscorr = False
     if dolocal:
         geoifgdir = 'GEOC'
