@@ -1065,7 +1065,7 @@ def process_ifg_core(ifg, tmpdir = os.getcwd(),
 
 def process_frame(frame = 'dummy', ml = 10, thres = 0.3, smooth = False, cascade=False,
             hgtcorr = True, gacoscorr = True, only10 = True,
-            lowpass = False, goldstein = True,
+            lowpass = False, goldstein = True, pre_detrend = False,
             cliparea_geo = None, pairsetfile = None, 
             export_to_tif = False, subtract_gacos = False,
             nproc = 1, dolocal = False, specmag = False, defomax = 0.3,
@@ -1350,7 +1350,7 @@ def process_frame(frame = 'dummy', ml = 10, thres = 0.3, smooth = False, cascade
                         else:
                             ifg_ml = process_ifg(frame, pair, procdir = procdir, ml = ml, hgtcorr = hgtcorr, fillby = 'nearest',   # nov 2022, orig was gauss
                                 thres = thres, defomax = defomax, add_resid = True, outtif = outtif, extweights = extweights, smooth = smooth,
-                                lowpass=lowpass, goldstein=goldstein, specmag = specmag,
+                                lowpass=lowpass, goldstein=goldstein, specmag = specmag, pre_detrend = pre_detrend,
                                 keep_coh_debug = keep_coh_debug, gacoscorr = gacoscorr, cliparea_geo = cliparea_geo,
                                 subtract_gacos = subtract_gacos, dolocal=dolocal, do_landmask = do_landmask)
                     else:
@@ -1358,7 +1358,7 @@ def process_frame(frame = 'dummy', ml = 10, thres = 0.3, smooth = False, cascade
                         cohtif=os.path.join(geoifgdir, pair, pair+'.geo.cc.tif')
                         ifg_ml = process_ifg_pair(phatif, cohtif, procpairdir = os.path.join(procdir,pair), ml = ml, hgtcorr = hgtcorr, fillby = 'nearest',
                                                  thres = thres, defomax = defomax, add_resid = True, outtif = outtif, extweights = extweights, smooth = smooth,
-                                                 lowpass=lowpass, goldstein=goldstein, specmag = specmag,
+                                                 lowpass=lowpass, goldstein=goldstein, specmag = specmag, pre_detrend = pre_detrend,
                                                  keep_coh_debug = keep_coh_debug, gacoscorr = gacoscorr, cliparea_geo = cliparea_geo,
                                                  subtract_gacos = subtract_gacos, cascade = cascade)
                     (ifg_ml.unw.where(ifg_ml.mask_full > 0).values).astype(np.float32).tofile(pair+'/'+pair+'.unw')
