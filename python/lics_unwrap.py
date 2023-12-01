@@ -317,7 +317,7 @@ ifg_ml = process_ifg(frame, pair, procdir = procdir, ml = 1,
 
 def process_ifg(frame, pair, procdir = os.getcwd(), 
         ml = 10, fillby = 'gauss', thres = 0.2, smooth = False, lowpass = True, 
-        goldstein = True, specmag = False,
+        goldstein = True, specmag = False, prefer_unfiltered = True,
         defomax = 0.6, hgtcorr = False, gacoscorr = True, pre_detrend = True,
         cliparea_geo = None, outtif = None, prevest = None, prev_ramp = None,
         coh2var = False, add_resid = True,  rampit=False, subtract_gacos = False, dolocal = False,
@@ -360,7 +360,7 @@ def process_ifg(frame, pair, procdir = os.getcwd(),
         xarray.Dataset: unwrapped multilooked interferogram with additional layers
     """
     try:
-        ifg = load_ifg(frame, pair, unw=False, dolocal=dolocal, do_landmask = do_landmask)
+        ifg = load_ifg(frame, pair, unw=False, dolocal=dolocal, prefer_unfiltered=prefer_unfiltered, do_landmask = do_landmask)
     except:
         print('error in loading data')
         return False
@@ -1070,7 +1070,7 @@ def process_frame(frame = 'dummy', ml = 10, thres = 0.3, smooth = False, cascade
             export_to_tif = False, subtract_gacos = False,
             nproc = 1, dolocal = False, specmag = False, defomax = 0.3,
             use_amp_stab = False, use_coh_stab = False, use_amp_coh = False, keep_coh_debug = True,
-            freq=5405000000, gacosdir = '../GACOS', do_landmask = True):
+            freq=5405000000, gacosdir = '../GACOS', do_landmask = True, prefer_unfiltered = True):
     """Main function to process whole LiCSAR frame (i.e. unwrap all available interferograms within the frame). Works only at JASMIN.
 
     Args:
@@ -1352,7 +1352,7 @@ def process_frame(frame = 'dummy', ml = 10, thres = 0.3, smooth = False, cascade
                                 thres = thres, defomax = defomax, add_resid = True, outtif = outtif, extweights = extweights, smooth = smooth,
                                 lowpass=lowpass, goldstein=goldstein, specmag = specmag, pre_detrend = pre_detrend,
                                 keep_coh_debug = keep_coh_debug, gacoscorr = gacoscorr, cliparea_geo = cliparea_geo,
-                                subtract_gacos = subtract_gacos, dolocal=dolocal, do_landmask = do_landmask)
+                                subtract_gacos = subtract_gacos, dolocal=dolocal, do_landmask = do_landmask, prefer_unfiltered = prefer_unfiltered)
                     else:
                         phatif=os.path.join(geoifgdir, pair, pair+'.geo.'+ext+'.tif')
                         cohtif=os.path.join(geoifgdir, pair, pair+'.geo.cc.tif')
@@ -1795,7 +1795,7 @@ def load_from_tifs(phatif, cohtif, landmask_tif = None, cliparea_geo = None):
     return ifg
 
 
-def load_ifg(frame, pair, unw=True, dolocal=False, mag=True, cliparea_geo = None, do_landmask = True):
+def load_ifg(frame, pair, unw=True, dolocal=False, mag=True, cliparea_geo = None, prefer_unfiltered = True, do_landmask = True):
     if dolocal:
         geoifgdir = 'GEOC'
         if not os.path.exists(geoifgdir):
@@ -1824,13 +1824,18 @@ def load_ifg(frame, pair, unw=True, dolocal=False, mag=True, cliparea_geo = None
         Ufile = os.path.join(geoframedir,'metadata',frame+'.geo.U.tif')
         #print('debug l 1667: using U')
         landmask_file = os.path.join(geoframedir,'metadata',frame+'.geo.landmask.tif')
-    #orig files
-    ext = 'diff_unfiltered_pha'
-    ifg_pha_file = os.path.join(geoifgdir, pair + '.geo.' + ext + '.tif')
-    if not os.path.exists(ifg_pha_file):
+    if prefer_unfiltered:
+        #orig files
+        ext = 'diff_unfiltered_pha'
+        ifg_pha_file = os.path.join(geoifgdir, pair + '.geo.' + ext + '.tif')
+        if not os.path.exists(ifg_pha_file):
+            ext = 'diff_pha'
+            # will use only the filtered ifgs now..
+            ifg_pha_file = os.path.join(geoifgdir,pair+'.geo.'+ext+'.tif')
+    else:
         ext = 'diff_pha'
         # will use only the filtered ifgs now..
-        ifg_pha_file = os.path.join(geoifgdir,pair+'.geo.'+ext+'.tif')
+        ifg_pha_file = os.path.join(geoifgdir, pair + '.geo.' + ext + '.tif')
     coh_file = os.path.join(geoifgdir,pair+'.geo.cc.tif')
     #landmask_file = os.path.join(geoframedir,'metadata',frame+'.geo.landmask.tif')
     # load the files
