@@ -545,7 +545,7 @@ def process_ifg_core(ifg, tmpdir = os.getcwd(),
         defomax = 0.6, hgtcorr = False, gacoscorr = True, pre_detrend = True,
         cliparea_geo = None, outtif = None, prevest = None, prev_ramp = None,
         coh2var = False, add_resid = True,  rampit=False, subtract_gacos = False,
-        extweights = None, keep_coh_debug = True, keep_coh_px = 0.25):
+        extweights = None, extweights_mask_threshold = 0.25, keep_coh_debug = True, keep_coh_px = 0.25):
     """Core ifg unwrapping procedure
     Note: tmpdir should be place for unneeded products (please keep unique per pair)
     """
@@ -574,6 +574,9 @@ def process_ifg_core(ifg, tmpdir = os.getcwd(),
     if type(extweights) != type(None):
         print('applying external weights - experimental.')
         ifg['cpx'].values = magpha2RI_array(extweights.values, ifg.pha.values)
+        if type(extweights_mask_threshold) != type(None):
+            print('masking using the ext. weights threshold of '+str(extweights_mask_threshold))
+            ifg['mask'] = ifg['mask'] * ifg['mask'].where(extweights > extweights_mask_threshold).fillna(0)
     else:
         if 'mag' in ifg:
             ifg['cpx'].values = magpha2RI_array(ifg.mag.values, ifg.pha.values)
