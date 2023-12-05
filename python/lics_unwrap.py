@@ -352,7 +352,7 @@ def process_ifg(frame, pair, procdir = os.getcwd(),
         subtract_gacos (boolean): switch whether to return the interferograms with GACOS being subtracted (by default, GACOS is used only to support unwrapping and would be added back)
         dolocal (boolean): switch to use local directory to find interferograms, rather than search for LiCSAR_public directory in JASMIN
         
-        extweights (xr.DataArray): external weights, e.g. amplitude stability or coherence ratio (or another array) to be used for weighting the phase instead of the original coherence
+        extweights (np.ndarray): external weights, e.g. amplitude stability or coherence ratio (or another array) to be used for weighting the phase instead of the original coherence
         keep_coh_debug (boolean): only in combination with use_coh_stab or use_amp_stab - whether or not to keep original (downsampled) ifg coherence after using the amp/coh_stab to weight the phase during multilooking
         keep_coh_px (float or None): threshold for coherence upon which pixels would be unmasked (default: 0.25, use None or False to not add back coherent pixels). Practically, we mask based on consistence and then unmask coherent pixels.
     
@@ -486,7 +486,7 @@ def process_ifg_pair(phatif, cohtif, procpairdir = os.getcwd(),
         rampit (boolean): perform an extra strong gaussian filter to get a very rough unwrapping result. basically a longwave signal ramp. used by cascade approach
         subtract_gacos (boolean): switch whether to return the interferograms with GACOS being subtracted (by default, GACOS is used only to support unwrapping and would be added back)
         
-        extweights (xr.DataArray): external weights, e.g. amplitude stability or coherence ratio (or another array) to be used for weighting the phase instead of the original coherence
+        extweights (np.ndarray): external weights, e.g. amplitude stability or coherence ratio (or another array) to be used for weighting the phase instead of the original coherence
         keep_coh_debug (boolean): only in combination with use_coh_stab or use_amp_stab - whether or not to keep original (downsampled) ifg coherence after using the amp/coh_stab to weight the phase during multilooking
         keep_coh_px (float or None): threshold for coherence upon which pixels would be unmasked (default: 0.25, use None or False to not add back coherent pixels). Practically, we mask based on consistence and then unmask coherent pixels.
     
@@ -564,11 +564,11 @@ def process_ifg_core(ifg, tmpdir = os.getcwd(),
     #make complex from coh and pha
     ifg['cpx'] = ifg.coh.copy()
     if coh2var:
+        coh = ifg['coh']
         if type(extweights) != type(None):
             # use extweights for better weights - and calculate variance out of this
-            coh = extweights
-        else:
-            coh = ifg['coh']
+            coh.values = extweights # extweights must be np.ndarray, not xr.DataArray!
+        #
         # if this is better, i will change it and have it fixed
         extweights = (2*coh**2)/(1-coh**2)
     if type(extweights) != type(None):
@@ -576,7 +576,7 @@ def process_ifg_core(ifg, tmpdir = os.getcwd(),
         ifg['cpx'].values = magpha2RI_array(extweights.values, ifg.pha.values)
         if type(extweights_mask_threshold) != type(None):
             print('masking using the ext. weights threshold of '+str(extweights_mask_threshold))
-            ifg['mask'] = ifg['mask'] * ifg['mask'].where(extweights > extweights_mask_threshold).fillna(0)
+            ifg['mask'] = ifg['mask'] * ifg['mask'].where(extweights > extweights_mask_threshold).fillna(0)  # extweights should be np.ndarray or with same coords as ifg.mask
     else:
         if 'mag' in ifg:
             ifg['cpx'].values = magpha2RI_array(ifg.mag.values, ifg.pha.values)
@@ -1257,7 +1257,9 @@ def process_frame(frame = 'dummy', ml = 10, thres = 0.3, smooth = False, cascade
         ampavg = None
         use_coh_stab = False
         use_amp_stab = False
-    # TODO(?): nullifying ext weights based on some well-defined treshold (aka PS-SB approach....)
+    # TODO(?): nullifying ext weights based on some well-defined treshold (aka GMTSAR's PS-SB approach....)
+    # currently hardcoded as extraweights_* param in process_ifg_core - in dev.
+    extweights = extweights.values # make it just ndarray
     pairset = None
     if pairsetfile:
         try:
