@@ -570,10 +570,10 @@ def process_ifg_core(ifg, tmpdir = os.getcwd(),
             coh.values = extweights # extweights must be np.ndarray, not xr.DataArray!
         #
         # if this is better, i will change it and have it fixed
-        extweights = (2*coh**2)/(1-coh**2)
+        extweights = (2*coh.values**2)/(1-coh.values**2)
     if type(extweights) != type(None):
         print('applying external weights - experimental.')
-        ifg['cpx'].values = magpha2RI_array(extweights.values, ifg.pha.values)
+        ifg['cpx'].values = magpha2RI_array(extweights, ifg.pha.values)
         if type(extweights_mask_threshold) != type(None):
             print('masking using the ext. weights threshold of '+str(extweights_mask_threshold))
             ifg['mask'] = ifg['mask'] * ifg['mask'].where(extweights > extweights_mask_threshold).fillna(0)  # extweights should be np.ndarray or with same coords as ifg.mask
@@ -1259,7 +1259,10 @@ def process_frame(frame = 'dummy', ml = 10, thres = 0.3, smooth = False, cascade
         use_amp_stab = False
     # TODO(?): nullifying ext weights based on some well-defined treshold (aka GMTSAR's PS-SB approach....)
     # currently hardcoded as extraweights_* param in process_ifg_core - in dev.
-    extweights = extweights.values # make it just ndarray
+    try:
+        extweights = extweights.values # make it just ndarray
+    except:
+        pass
     pairset = None
     if pairsetfile:
         try:
