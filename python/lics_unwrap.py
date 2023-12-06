@@ -1737,11 +1737,27 @@ def multilook_normalised(ifg, ml = 10, tmpdir = os.getcwd(), hgtcorr = True,
 
 
 def load_tif(frame,pair,dtype='unw',cliparea_geo=None):
+    """
+    Loads geotiff from the LiCSAR database
+    Args:
+        frame: str
+        pair: srt --- can be also epoch!!
+        dtype: 'unw', 'diff_pha', 'coh',... and also 'mli' etc.
+        cliparea_geo: str
+
+    Returns:
+        xr.DataArray
+    """
     pubdir = os.environ['LiCSAR_public']
     geoframedir = os.path.join(pubdir,str(int(frame[:3])),frame)
-    geoifgdir = os.path.join(geoframedir,'interferograms',pair)
-    infile = os.path.join(geoifgdir,pair+'.geo.'+dtype+'.tif')
-    return  load_tif2xr(infile,cliparea_geo=cliparea_geo)
+    if '_' not in pair:
+        # it is an epoch!
+        geoepochsdir = os.path.join(geoframedir, 'epochs', pair)
+        infile = os.path.join(geoepochsdir, pair + '.geo.' + dtype + '.tif')
+    else:
+        geoifgdir = os.path.join(geoframedir,'interferograms',pair)
+        infile = os.path.join(geoifgdir,pair+'.geo.'+dtype+'.tif')
+    return load_tif2xr(infile,cliparea_geo=cliparea_geo)
 
 
 def get_resolution(ifg, in_m=True):
