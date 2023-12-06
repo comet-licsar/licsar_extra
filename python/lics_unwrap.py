@@ -1220,7 +1220,7 @@ def process_frame(frame = 'dummy', ml = 10, thres = 0.3, smooth = False, cascade
                 ampstab = 1 - ampstab  # need to calc here as for use_amp_coh we need the avgs..
                 if not os.path.exists(ampstabfile):
                     ampstab.to_netcdf(ampstabfile)
-                extweights = ampstab
+            extweights = ampstab
         except:
             print('some error happened, disabling use of amplitude stability')
             use_amp_stab = False
@@ -1271,6 +1271,7 @@ def process_frame(frame = 'dummy', ml = 10, thres = 0.3, smooth = False, cascade
     try:
         extweights = extweights.values # make it just ndarray
     except:
+        print('some problem with ext weights...')
         pass
     pairset = None
     if pairsetfile:
@@ -1367,10 +1368,12 @@ def process_frame(frame = 'dummy', ml = 10, thres = 0.3, smooth = False, cascade
                         else:
                             print('debug - all ok')
                             ifg_ml = process_ifg(frame, pair, procdir = procdir, ml = ml, hgtcorr = hgtcorr, fillby = fillby,   # nov 2022, orig was gauss
-                                thres = thres, defomax = defomax, add_resid = True, outtif = outtif, extweights = extweights, smooth = smooth,
+                                thres = thres, defomax = defomax, add_resid = True, outtif = outtif, extweights = extweights,
+                                smooth = smooth,
                                 lowpass=lowpass, goldstein=goldstein, specmag = specmag, pre_detrend = pre_detrend,
                                 keep_coh_debug = keep_coh_debug, gacoscorr = gacoscorr, cliparea_geo = cliparea_geo,
-                                subtract_gacos = subtract_gacos, dolocal=dolocal, do_landmask = do_landmask, prefer_unfiltered = prefer_unfiltered)
+                                subtract_gacos = subtract_gacos, dolocal=dolocal, do_landmask = do_landmask,
+                                prefer_unfiltered = prefer_unfiltered)
                     else:
                         phatif=os.path.join(geoifgdir, pair, pair+'.geo.'+ext+'.tif')
                         cohtif=os.path.join(geoifgdir, pair, pair+'.geo.cc.tif')
