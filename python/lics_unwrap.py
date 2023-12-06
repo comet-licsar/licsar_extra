@@ -321,7 +321,7 @@ def process_ifg(frame, pair, procdir = os.getcwd(),
         defomax = 0.6, hgtcorr = False, gacoscorr = True, pre_detrend = True,
         cliparea_geo = None, outtif = None, prevest = None, prev_ramp = None,
         coh2var = False, add_resid = True,  rampit=False, subtract_gacos = False, dolocal = False,
-        extweights = None, keep_coh_debug = True, keep_coh_px = 0.25, do_landmask = True):
+        extweights = None, extweights_mask_threshold = 0.25, keep_coh_debug = True, keep_coh_px = 0.25, do_landmask = True):
     """Main function to unwrap a geocoded LiCSAR interferogram. Works on JASMIN (but can be easily adapted for local use)
     
     Args:
@@ -429,7 +429,7 @@ def process_ifg(frame, pair, procdir = os.getcwd(),
         defomax = defomax, hgtcorr = hgtcorr, gacoscorr = gacoscorr, pre_detrend = pre_detrend,
         cliparea_geo = cliparea_geo, outtif = outtif, prevest = prevest, prev_ramp = prev_ramp,
         coh2var = coh2var, add_resid = add_resid,  rampit=rampit, subtract_gacos = subtract_gacos,
-        extweights = extweights, keep_coh_debug = keep_coh_debug, keep_coh_px = keep_coh_px, tmpdir = tmpdir)
+        extweights = extweights, extweights_mask_threshold = extweights_mask_threshold, keep_coh_debug = keep_coh_debug, keep_coh_px = keep_coh_px, tmpdir = tmpdir)
     
     return ifg_ml
 
@@ -549,6 +549,8 @@ def process_ifg_core(ifg, tmpdir = os.getcwd(),
     """Core ifg unwrapping procedure
     Note: tmpdir should be place for unneeded products (please keep unique per pair)
     """
+    if (type(extweights) == type(None)):
+        extweights_mask_threshold = None
     # masking by coherence if we do not use multilooking - here the coherence corresponds to reality
     tmpunwdir = os.path.join(tmpdir,'temp_unw') # do not create this as it will be done in unwrap_np
     if not os.path.exists(tmpdir):
@@ -620,7 +622,13 @@ def process_ifg_core(ifg, tmpdir = os.getcwd(),
                 print('WARNING: prev_ramp is also set. will NOT use prevest at all')
             else:
                 prev_ramp = prevest
-    ifg_ml = multilook_normalised(ifg, ml, tmpdir = tmpdir, hgtcorr = hgtcorr, pre_detrend = pre_detrend, prev_ramp = prev_ramp, keep_coh_debug = keep_coh_debug)
+    if extweights_mask_threshold:
+        # good trick for masking the multilooked data. tested on ML=5
+        thres_pxcount = ml
+    else:
+        thres_pxcount = None
+    ifg_ml = multilook_normalised(ifg, ml, tmpdir = tmpdir, hgtcorr = hgtcorr,
+                                  thres_pxcount = thres_pxcount, pre_detrend = pre_detrend, prev_ramp = prev_ramp, keep_coh_debug = keep_coh_debug)
     width = len(ifg_ml.lon)
     length = len(ifg_ml.lat)
     if lowpass:
@@ -737,8 +745,8 @@ def process_ifg_core(ifg, tmpdir = os.getcwd(),
         # now let's do the old way (not really recommended anymore, as the gaussian would not follow the phase gradient as fine as goldstein filter..
         # if not, do the original 'smooth' approach, just to get proper mask
         #print('finally, filter using (adapted) gauss filter')
-        if ml > 2:
-            calc_coh_from_delta = True
+        if ml > 2 and not extweights_mask_threshold:
+            calc_coh_from_delta = True  # we don't really want to mask too much if we use ampstab for masking
         else:
             # that part takes ages and it is not that big improvement..
             calc_coh_from_delta = False
@@ -1073,7 +1081,8 @@ def process_frame(frame = 'dummy', ml = 10, thres = 0.3, smooth = False, cascade
             export_to_tif = False, subtract_gacos = False,
             nproc = 1, dolocal = False, specmag = False, defomax = 0.3,
             use_amp_stab = False, use_coh_stab = False, use_amp_coh = False, keep_coh_debug = True,
-            freq=5405000000, gacosdir = '../GACOS', do_landmask = True, prefer_unfiltered = True):
+            freq=5405000000, gacosdir = '../GACOS', do_landmask = True, prefer_unfiltered = True,
+            fillby = 'nearest'):
     """Main function to process whole LiCSAR frame (i.e. unwrap all available interferograms within the frame). Works only at JASMIN.
 
     Args:
@@ -1356,7 +1365,8 @@ def process_frame(frame = 'dummy', ml = 10, thres = 0.3, smooth = False, cascade
                                 outtif = outtif, subtract_gacos = subtract_gacos, smooth = smooth, hgtcorr = hgtcorr, 
                                 cliparea_geo = cliparea_geo, thres = thres, finalgoldstein=goldstein, dolocal=dolocal, do_landmask=do_landmask)
                         else:
-                            ifg_ml = process_ifg(frame, pair, procdir = procdir, ml = ml, hgtcorr = hgtcorr, fillby = 'nearest',   # nov 2022, orig was gauss
+                            print('debug - all ok')
+                            ifg_ml = process_ifg(frame, pair, procdir = procdir, ml = ml, hgtcorr = hgtcorr, fillby = fillby,   # nov 2022, orig was gauss
                                 thres = thres, defomax = defomax, add_resid = True, outtif = outtif, extweights = extweights, smooth = smooth,
                                 lowpass=lowpass, goldstein=goldstein, specmag = specmag, pre_detrend = pre_detrend,
                                 keep_coh_debug = keep_coh_debug, gacoscorr = gacoscorr, cliparea_geo = cliparea_geo,
@@ -1364,7 +1374,8 @@ def process_frame(frame = 'dummy', ml = 10, thres = 0.3, smooth = False, cascade
                     else:
                         phatif=os.path.join(geoifgdir, pair, pair+'.geo.'+ext+'.tif')
                         cohtif=os.path.join(geoifgdir, pair, pair+'.geo.cc.tif')
-                        ifg_ml = process_ifg_pair(phatif, cohtif, procpairdir = os.path.join(procdir,pair), ml = ml, hgtcorr = hgtcorr, fillby = 'nearest',
+                        print('debug - local here')
+                        ifg_ml = process_ifg_pair(phatif, cohtif, procpairdir = os.path.join(procdir,pair), ml = ml, hgtcorr = hgtcorr, fillby = fillby,
                                                  thres = thres, defomax = defomax, add_resid = True, outtif = outtif, extweights = extweights, smooth = smooth,
                                                  lowpass=lowpass, goldstein=goldstein, specmag = specmag, pre_detrend = pre_detrend,
                                                  keep_coh_debug = keep_coh_debug, gacoscorr = gacoscorr, cliparea_geo = cliparea_geo,
@@ -1626,6 +1637,8 @@ def multilook_normalised(ifg, ml = 10, tmpdir = os.getcwd(), hgtcorr = True,
                 print('GACOS decreases avg coh by '+str(cohchangeval)+'. Skipping use of GACOS to support unwrapping')
                 # just .. returning it back..
                 ifg_ml['pha'].values = wrap2phase(ifg_ml['pha'] + ifg_ml['gacos'])
+                print('instead, trying hgtcorr...')
+                hgtcorr = True
             else:
                 ifg_ml['toremove'] = ifg_ml['toremove'] + ifg_ml['gacos']
         else:
@@ -1650,6 +1663,8 @@ def multilook_normalised(ifg, ml = 10, tmpdir = os.getcwd(), hgtcorr = True,
     #
     if 'hgt' in ifg.variables:
         ifg_ml['hgt'] = ifg_ml['hgt'].where(ifg_ml.mask>0)
+    else:
+        hgtcorr = False
     # perform Gaussian filtering
     #ifg_ml = filter_ifg_ml(ifg_ml)
     #now fix the correlation with heights:
@@ -1837,6 +1852,7 @@ def load_ifg(frame, pair, unw=True, dolocal=False, mag=True, cliparea_geo = None
         ext = 'diff_unfiltered_pha'
         ifg_pha_file = os.path.join(geoifgdir, pair + '.geo.' + ext + '.tif')
         if not os.path.exists(ifg_pha_file):
+            print('no unfiltered ifg exists here')
             ext = 'diff_pha'
             # will use only the filtered ifgs now..
             ifg_pha_file = os.path.join(geoifgdir,pair+'.geo.'+ext+'.tif')
