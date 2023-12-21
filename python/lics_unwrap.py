@@ -1771,11 +1771,21 @@ def get_resolution(ifg, in_m=True):
         return float(resdeg)
 
 
-def load_from_nparrays(inpha,incoh):
+def load_from_nparrays(inpha,incoh,maskthres = 0.05):
+    ''' Function to load from pha, coh in numpy.ndarray.
+    Note: should not contain nans, and 0 will be masked
+
+    Args:
+        inpha: np.ndarray
+        incoh: np.ndarray (can be either 0-1 or 0-255)
+        maskthres: float - threshold for coherence (0-1) for masking
+    Returns:
+        xr.Dataset
+    '''
     if incoh.max() > 2:
         incoh = incoh/255
     inmask = incoh.copy()
-    inmask = np.byte(incoh > 0.05)
+    inmask = np.byte(incoh > maskthres) # this will mask coh=0 that we consider 'nan'
     ifg = xr.Dataset()
     ifgpha=xr.DataArray(inpha)
     ifgpha = xr.DataArray(
@@ -1792,6 +1802,8 @@ def load_from_nparrays(inpha,incoh):
     print('WARNING, using coherence to form cpx')
     ifg['cpx'].values = magpha2RI_array(ifg.coh.values, ifg.pha.values)
     ifg['mask_extent'] = ifg['pha'].where(ifg['pha'] == 0).fillna(1)
+    #ifg['mask'] = ifg['mask']*ifg['mask_extent']
+    #ifg['mask'] = ifg['mask_extent']
     return ifg
 
 
