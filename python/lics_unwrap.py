@@ -1794,15 +1794,17 @@ def load_from_nparrays(inpha,incoh,maskthres = 0.05):
         coords={"y": ifgpha.dim_0.values, "x": ifgpha.dim_1.values},
     )
     ifg['pha'] = ifgpha
+    ifg['pha'] = ifg['pha'].fillna(0)
     ifg['coh'] = ifg['pha']
     ifg['coh'].values = incoh
+    ifg['coh'] = ifg['coh'].fillna(0)
     ifg['mask'] = ifg['pha']
     ifg['mask'].values = inmask
     ifg['cpx'] = ifg.coh.copy()
     print('WARNING, using coherence to form cpx')
     ifg['cpx'].values = magpha2RI_array(ifg.coh.values, ifg.pha.values)
     ifg['mask_extent'] = ifg['pha'].where(ifg['pha'] == 0).fillna(1)
-    #ifg['mask'] = ifg['mask']*ifg['mask_extent']
+    ifg['mask'] = ifg['mask']*ifg['mask_extent']
     #ifg['mask'] = ifg['mask_extent']
     return ifg
 
