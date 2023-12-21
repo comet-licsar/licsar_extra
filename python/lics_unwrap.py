@@ -1793,10 +1793,10 @@ def load_from_nparrays(inpha,incoh,maskthres = 0.05):
         dims=["y", "x"],
         coords={"y": ifgpha.dim_0.values, "x": ifgpha.dim_1.values},
     )
-    ifg['pha'] = ifgpha
+    ifg['pha'] = ifgpha.astype(np.float32)
     ifg['pha'] = ifg['pha'].fillna(0)
     ifg['coh'] = ifg['pha']
-    ifg['coh'].values = incoh
+    ifg['coh'].values = incoh.astype(np.float32)
     ifg['coh'] = ifg['coh'].fillna(0)
     ifg['mask'] = ifg['pha']
     ifg['mask'].values = inmask
