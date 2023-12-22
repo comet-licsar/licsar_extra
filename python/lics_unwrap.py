@@ -2828,12 +2828,14 @@ def unwrap_xr(ifg, mask=True, defomax = 0.3, tmpdir=os.path.join(os.getcwd(),'tm
     """
     coh = ifg.coh.values
     cpx = ifg.cpx.fillna(0).astype(np.complex64).values
+    maskback = False
     if mask:
+        maskback = True
         mask = ifg.mask.fillna(0).values
     unw = unwrap_np(cpx, coh, mask = mask, defomax = defomax, tmpdir=tmpdir, deltemp=False)
     ifg['unw']=ifg.pha.copy(deep=True)
     ifg['unw'].values = unw
-    if mask:
+    if maskback:
         ifg['unw'] = ifg.unw.where(ifg['mask']==1)
     return ifg
 
