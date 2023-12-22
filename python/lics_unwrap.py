@@ -2819,7 +2819,7 @@ def unwrap_xr(ifg, mask=True, defomax = 0.3, tmpdir=os.path.join(os.getcwd(),'tm
     
     Args:
         ifg (xarray.Dataset): ifg dataset
-        mask (boolean): whether to use mask
+        mask (boolean): whether to use mask (it will then return unw after masking)
         defomax (float): DEFOMAX to snaphu
         tmpdir (string): temp dir
     
@@ -2833,6 +2833,8 @@ def unwrap_xr(ifg, mask=True, defomax = 0.3, tmpdir=os.path.join(os.getcwd(),'tm
     unw = unwrap_np(cpx, coh, mask = mask, defomax = defomax, tmpdir=tmpdir, deltemp=False)
     ifg['unw']=ifg.pha.copy(deep=True)
     ifg['unw'].values = unw
+    if mask:
+        ifg['unw'] = ifg.unw.where(ifg['mask']==1)
     return ifg
 
 
