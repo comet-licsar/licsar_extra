@@ -43,6 +43,13 @@ import time
 import matplotlib.pyplot as plt
 import glob
 
+# check if there is snaphu
+if os.system('which snaphu >/dev/null 2>/dev/null') != 0:
+    print('snaphu not detected. please install it yourself, e.g. from:')
+    print('https://web.stanford.edu/group/radar/softwareandlinks/sw/snaphu')
+    exit()
+
+
 # avoid cv2 in ipynb
 def in_ipynb():
     try:
@@ -557,7 +564,10 @@ def process_ifg_core(ifg, tmpdir = os.getcwd(),
         os.mkdir(tmpdir)
     if ml == 1:
         cohthres = 0.15
-        ifg['mask'] = ifg['mask'] * ifg['mask'].where(ifg['coh'] < cohthres).fillna(1)
+    else:
+        # if multilooked, we may get some signal also in low coh areas. thus:
+        cohthres = 0.05
+    ifg['mask'] = ifg['mask'] * ifg['mask'].where(ifg['coh'] < cohthres).fillna(1)
     if hgtcorr:
         if not 'hgt' in ifg:
             print('ERROR in importing heights!')
@@ -1803,7 +1813,7 @@ def load_from_nparrays(inpha,incoh,maskthres = 0.05):
     ifg['cpx'] = ifg.coh.copy()
     print('WARNING, using coherence to form cpx')
     ifg['cpx'].values = magpha2RI_array(ifg.coh.values, ifg.pha.values)
-    ifg['mask_extent'] = ifg['pha'].where(ifg['pha'] == 0).fillna(1)
+    ifg['mask_extent'] = ifg['pha'].where(ifg['pha'] == 0).fillna(1) # 1 means 'what is to be kept - not masked away'
     ifg['mask'] = ifg['mask']*ifg['mask_extent']
     #ifg['mask'] = ifg['mask_extent']
     return ifg
