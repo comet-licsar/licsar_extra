@@ -328,7 +328,8 @@ def process_ifg(frame, pair, procdir = os.getcwd(),
         defomax = 0.6, hgtcorr = False, gacoscorr = True, pre_detrend = True,
         cliparea_geo = None, outtif = None, prevest = None, prev_ramp = None,
         coh2var = False, add_resid = True,  rampit=False, subtract_gacos = False, dolocal = False,
-        extweights = None, extweights_mask_threshold = 0.25, keep_coh_debug = True, keep_coh_px = 0.25, do_landmask = True):
+        extweights = None, extweights_mask_threshold = 0.25, keep_coh_debug = True, keep_coh_px = 0.25,
+        do_landmask = True):
     """Main function to unwrap a geocoded LiCSAR interferogram. Works on JASMIN (but can be easily adapted for local use)
     
     Args:
@@ -557,11 +558,17 @@ def process_ifg_core(ifg, tmpdir = os.getcwd(),
     """Core ifg unwrapping procedure
     Note: tmpdir should be place for unneeded products (please keep unique per pair)
     """
+    if goldstein:
+        # let's check and replace goldstein for the gamma's version if available
+        use_gamma = True
     if use_gamma:
         # check for gamma commands
-        if os.system('which adf >/dev/null 2>/dev/null') != 0:
-            print('GAMMA not found, disabling use of GAMMA commands')
+        if os.system('which adf2 >/dev/null 2>/dev/null') != 0:
+            print('Warning: GAMMA SW not found, not using GAMMA ADF for filtering')
             use_gamma = False
+        else:
+            if thres == 0.35:
+                thres = 0.5  # just setting different default threshold for ADF2 outputs
     if (type(extweights) == type(None)):
         extweights_mask_threshold = None
     # masking by coherence if we do not use multilooking - here the coherence corresponds to reality
