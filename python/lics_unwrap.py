@@ -3401,18 +3401,18 @@ def adf_filter_xr(inpha, incoh, tempadfdir = 'tempadfdir', blocklen=16, alpha=0.
     binCPX = os.path.join(tempadfdir, 'cpxifg.bin')
     incpx = pha2cpx(inpha.fillna(0).values)
     incoh.values.astype(np.float32).byteswap().tofile(bincoh)
-    incpx.astype(np.complex128).byteswap().tofile(binCPX)  # ADF expects FCOMPLEX which is... cpx128? need to check
+    incpx.astype(np.complex64).byteswap().tofile(binCPX)  # ADF expects FCOMPLEX which is... cpx64? need to check
     # 2. process using:
     # adf2 FCOMPLEXIFG FLOATCOH FCOMPLEX_FILTEREDIFG FLOAT_FILTEREDCOH width
     width = incoh.shape[1]
     boutcoh = bincoh+'.out'
     boutCPX = binCPX+'.out'
-    cmd = "adf2 {0} {1} {2} {3} {4} {5} {6} >/dev/null 2>dev/null".format(bincoh, binCPX, boutcoh, boutCPX, str(width), str(alpha), str(blocklen))
+    cmd = "adf2 {0} {1} {2} {3} {4} {5} {6} >/dev/null 2>dev/null".format(binCPX, bincoh, boutcoh, boutCPX, str(width), str(alpha), str(blocklen))
     print('debug - filtering with adf: ')
     print(cmd)
     rc = os.system(cmd)
     # 3. load FILTERED* back and return as xr.DataArrays (or np.arrays)
-    filteredpha = np.fromfile(boutCPX,dtype=np.complex128).byteswap()
+    filteredpha = np.fromfile(boutCPX,dtype=np.complex64).byteswap()
     filteredcoh = np.fromfile(boutcoh,dtype=np.float32).byteswap()
     filteredpha = np.angle(filteredpha).astype(np.float32)
     filteredpha = filteredpha.reshape(incoh.shape)
