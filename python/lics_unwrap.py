@@ -552,10 +552,16 @@ def process_ifg_core(ifg, tmpdir = os.getcwd(),
         defomax = 0.6, hgtcorr = False, gacoscorr = True, pre_detrend = True,
         cliparea_geo = None, outtif = None, prevest = None, prev_ramp = None,
         coh2var = False, add_resid = True,  rampit=False, subtract_gacos = False,
-        extweights = None, extweights_mask_threshold = 0.25, keep_coh_debug = True, keep_coh_px = 0.25):
+        extweights = None, extweights_mask_threshold = 0.25, keep_coh_debug = True,
+        use_gamma = False, keep_coh_px = 0.25):
     """Core ifg unwrapping procedure
     Note: tmpdir should be place for unneeded products (please keep unique per pair)
     """
+    if use_gamma:
+        # check for gamma commands
+        if os.system('which adf >/dev/null 2>/dev/null') != 0:
+            print('GAMMA not found, disabling use of GAMMA commands')
+            use_gamma = False
     if (type(extweights) == type(None)):
         extweights_mask_threshold = None
     # masking by coherence if we do not use multilooking - here the coherence corresponds to reality
@@ -647,7 +653,6 @@ def process_ifg_core(ifg, tmpdir = os.getcwd(),
     #update the origpha to keep state before filtering
     ifg_ml['origpha'] = ifg_ml.pha.copy(deep=True)
     if goldstein:
-        print('filtering by goldstein filter')
         # this line waits for super-truper improvement - as the spectral magnitude could be used as quality measure! i think..
         # but i have to skip it for now
         #ifg_ml['filtpha'], specmag = goldstein_filter_xr(ifg_ml.pha, blocklen=16, alpha=0.8, nproc=1, returncoh=False)
@@ -656,7 +661,24 @@ def process_ifg_core(ifg, tmpdir = os.getcwd(),
         # sp[sp<0]=0
         # sp[sp>1]=1
         # spmask=sp>thres # try 0.25
-        ifg_ml['filtpha'], sp = goldstein_filter_xr(ifg_ml.pha, blocklen=16, alpha=0.8, nproc=1, returncoh=(not specmag))
+        if use_gamma:
+            print('filtering by gammas ADF')
+            try:
+                tmpadfdir = os.path.join(tmpdir, 'temp_adf')  # do not create this as it will be done in unwrap_np
+                if not os.path.exists(tmpadfdir):
+                    os.mkdir(tmpadfdir)
+                ifg_ml['filtpha'], sp = adf_filter_xr(ifg_ml.pha, ifg_ml.coh, tempadfdir = tmpadfdir, blocklen=16) #, alpha=0.8)
+                try:
+                    shutil.rmtree(tmpadfdir)
+                except:
+                    print('WARNING, could not clean following temporary folder:')
+                    print(tmpadfdir)
+            except:
+                print('this did not work')
+                use_gamma = False
+        if not use_gamma:
+            print('filtering by custom-written goldstein filter (needs optimizing)')
+            ifg_ml['filtpha'], sp = goldstein_filter_xr(ifg_ml.pha, blocklen=16, alpha=0.8, nproc=1, returncoh=(not specmag))
         ifg_ml['gold_coh']=sp
         sp=sp.values
         sp[sp > 1] = 1  # should not happen, but just in case...
@@ -3358,6 +3380,44 @@ def goldstein_AHML(block, alpha=0.8, kernelsigma=0.75, mask_nyquist=False, retur
     # cc = np.abs(np.fft.ifft2(cc))
     # now put cc instead of the filtered spectral magnitude
     return cpxfilt
+
+
+def adf_filter_xr(inpha, incoh, tempadfdir = 'tempadfdir', blocklen=16, alpha=0.5):
+    """Gamma ADF filter incorporated here
+
+    Args:
+        inpha (xr.DataArray): array of phase (for now, the script will create cpx from phase)
+        incoh (xr.DataArray): da of coherence
+
+    Returns:
+        xr.DataArray,xr.DataArray: filtered phase, magnitude (try np.log to use for masking)
+    """
+    #inpha = ifg_ml['pha']
+    #incoh = ifg_ml['coh']
+    if not os.path.exists(tempadfdir):
+        os.mkdir(tempadfdir)
+    # 1. store it to temp folder
+    bincoh = os.path.join(tempadfdir, 'coh.bin')
+    binCPX = os.path.join(tempadfdir, 'cpxifg.bin')
+    incpx = pha2cpx(inpha.fillna(0).values)
+    incoh.values.astype(np.float32).byteswap().tofile(bincoh)
+    incpx.values.astype(np.complex128).byteswap().tofile(binCPX)  # ADF expects FCOMPLEX which is... cpx128? need to check
+    # 2. process using:
+    # adf2 FCOMPLEXIFG FLOATCOH FCOMPLEX_FILTEREDIFG FLOAT_FILTEREDCOH width
+    width = incoh.shape[1]
+    boutcoh = bincoh+'.out'
+    boutCPX = binCPX+'.out'
+    cmd = "adf2 {0} {1} {2} {3} {4} {5} {6} >/dev/null 2>dev/null".format(bincoh, binCPX, boutcoh, boutCPX, str(width), str(alpha), str(blocklen))
+    print('debug - filtering with adf: ')
+    print(cmd)
+    rc = os.system(cmd)
+    # 3. load FILTERED* back and return as xr.DataArrays (or np.arrays)
+    filteredpha = np.fromfile(boutCPX,dtype=np.complex128).byteswap()
+    filteredcoh = np.fromfile(boutcoh,dtype=np.float32).byteswap()
+    filteredpha = np.angle(filteredpha).astype(np.float32)
+    filteredpha = filteredpha.reshape(incoh.shape)
+    filteredcoh = filteredcoh.reshape(incoh.shape)
+    return filteredpha, filteredcoh
 
 
 def goldstein_filter_xr(inpha, blocklen=16, alpha=0.8, ovlpx=None, nproc=1, returncoh=True,
