@@ -674,7 +674,8 @@ def process_ifg_core(ifg, tmpdir = os.getcwd(),
                 tmpadfdir = os.path.join(tmpdir, 'temp_adf')  # do not create this as it will be done in unwrap_np
                 if not os.path.exists(tmpadfdir):
                     os.mkdir(tmpadfdir)
-                ifg_ml['filtpha'], sp = adf_filter_xr(ifg_ml.pha, ifg_ml.coh, tempadfdir = tmpadfdir, blocklen=16) #, alpha=0.8)
+                ifg_ml['filtpha'] = ifg_ml['pha']
+                ifg_ml.filtpha.values, sp = adf_filter_xr(ifg_ml.pha, ifg_ml.coh, tempadfdir = tmpadfdir, blocklen=16) #, alpha=0.8)
                 try:
                     shutil.rmtree(tmpadfdir)
                 except:
