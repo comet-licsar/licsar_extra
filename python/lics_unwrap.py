@@ -3401,7 +3401,7 @@ def adf_filter_xr(inpha, incoh, tempadfdir = 'tempadfdir', blocklen=16, alpha=0.
     binCPX = os.path.join(tempadfdir, 'cpxifg.bin')
     incpx = pha2cpx(inpha.fillna(0).values)
     incoh.values.astype(np.float32).byteswap().tofile(bincoh)
-    incpx.values.astype(np.complex128).byteswap().tofile(binCPX)  # ADF expects FCOMPLEX which is... cpx128? need to check
+    incpx.astype(np.complex128).byteswap().tofile(binCPX)  # ADF expects FCOMPLEX which is... cpx128? need to check
     # 2. process using:
     # adf2 FCOMPLEXIFG FLOATCOH FCOMPLEX_FILTEREDIFG FLOAT_FILTEREDCOH width
     width = incoh.shape[1]
