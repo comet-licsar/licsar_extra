@@ -674,8 +674,8 @@ def process_ifg_core(ifg, tmpdir = os.getcwd(),
                 tmpadfdir = os.path.join(tmpdir, 'temp_adf')  # do not create this as it will be done in unwrap_np
                 if not os.path.exists(tmpadfdir):
                     os.mkdir(tmpadfdir)
-                ifg_ml['filtpha'] = ifg_ml['pha']
-                ifg_ml.filtpha.values, sp = adf_filter_xr(ifg_ml.pha, ifg_ml.coh, tempadfdir = tmpadfdir, blocklen=16) #, alpha=0.8)
+                #ifg_ml['filtpha'] = ifg_ml['pha']
+                ifg_ml['filtpha'] sp = adf_filter_xr(ifg_ml.pha, ifg_ml.coh, tempadfdir = tmpadfdir, blocklen=16) #, alpha=0.8)
                 try:
                     shutil.rmtree(tmpadfdir)
                 except:
@@ -3394,11 +3394,11 @@ def adf_filter_xr(inpha, incoh, tempadfdir = 'tempadfdir', blocklen=16, alpha=0.
     """Gamma ADF filter incorporated here
 
     Args:
-        inpha (xr.DataArray): array of phase (for now, the script will create cpx from phase)
+        inpha (xr.DataArray): array of phase (the script will create cpx from phase)
         incoh (xr.DataArray): da of coherence
 
     Returns:
-        xr.DataArray,xr.DataArray: filtered phase, magnitude (try np.log to use for masking)
+        xr.DataArray,xr.DataArray: filtered phase, coherence (note, coh after adf has peaks at 0.35 and 0.8, good to distinguish noise)
     """
     #inpha = ifg_ml['pha']
     #incoh = ifg_ml['coh']
@@ -3425,7 +3425,13 @@ def adf_filter_xr(inpha, incoh, tempadfdir = 'tempadfdir', blocklen=16, alpha=0.
     filteredpha = np.angle(filteredpha).astype(np.float32)
     filteredpha = filteredpha.reshape(incoh.shape)
     filteredcoh = filteredcoh.reshape(incoh.shape)
-    return filteredpha, filteredcoh
+    # ok let's return this encapsulated as xr.DataArray:
+    outpha = inpha.copy()
+    outcoh = incoh.copy()
+    outpha.values = filteredpha
+    outcoh.values = filteredcoh
+    #return filteredpha, filteredcoh
+    return outpha, outcoh
 
 
 def goldstein_filter_xr(inpha, blocklen=16, alpha=0.8, ovlpx=None, nproc=1, returncoh=True,
