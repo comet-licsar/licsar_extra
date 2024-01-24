@@ -3407,7 +3407,7 @@ def adf_filter_xr(inpha, incoh, tempadfdir = 'tempadfdir', blocklen=16, alpha=0.
     width = incoh.shape[1]
     boutcoh = bincoh+'.out'
     boutCPX = binCPX+'.out'
-    cmd = "adf2 {0} {1} {2} {3} {4} {5} {6} >/dev/null 2>dev/null".format(binCPX, bincoh, boutcoh, boutCPX, str(width), str(alpha), str(blocklen))
+    cmd = "adf2 {0} {1} {2} {3} {4} {5} {6} >/dev/null 2>dev/null".format(binCPX, bincoh, boutCPX, boutcoh, str(width), str(alpha), str(blocklen))
     print('debug - filtering with adf: ')
     print(cmd)
     rc = os.system(cmd)
