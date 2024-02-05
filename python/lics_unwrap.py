@@ -463,7 +463,7 @@ def process_ifg_pair(phatif, cohtif, procpairdir = os.getcwd(),
         defomax = 0.6, hgtcorr = False, gacoscorr = True, pre_detrend = True,
         cliparea_geo = None, outtif = None, prevest = None, prev_ramp = None,
         coh2var = False, add_resid = True,  rampit=False, subtract_gacos = False,
-        extweights = None, keep_coh_debug = True, keep_coh_px = 0.25):
+        extweights = None, keep_coh_debug = True, keep_coh_px = 0.25, use_gamma = False):
     """Process pair data from their geotiffs (phase and coherence)
     Args:
         phatif (string): path to the input wrapped interferogram geotiff (recommended unfiltered version)
@@ -525,7 +525,7 @@ def process_ifg_pair(phatif, cohtif, procpairdir = os.getcwd(),
             cliparea_geo = cliparea_geo, outtif = outtif, prevest = prevest, prev_ramp = prev_ramp,
             coh2var = coh2var, add_resid = add_resid,  rampit=rampit, subtract_gacos = subtract_gacos,
             extweights = extweights, keep_coh_debug = keep_coh_debug, keep_coh_px = keep_coh_px,
-            tmpdir = tmpdir)
+            tmpdir = tmpdir, use_gamma = use_gamma)
     else:
         print('performing 1 step cascade')
         ml10=10*ml
@@ -536,14 +536,14 @@ def process_ifg_pair(phatif, cohtif, procpairdir = os.getcwd(),
             cliparea_geo = cliparea_geo, outtif = None, prevest = prevest, prev_ramp = prev_ramp,
             coh2var = coh2var, add_resid = False,  rampit=True, subtract_gacos = subtract_gacos,
             extweights = extweights, keep_coh_debug = keep_coh_debug, keep_coh_px = keep_coh_px,
-            tmpdir = tmpdir)
+            tmpdir = tmpdir, use_gamma = use_gamma)
         ifg_ml = process_ifg_core(ifg, 
             ml = ml, fillby = fillby, thres = thres, smooth = smooth, lowpass = lowpass, goldstein = goldstein, specmag = specmag,
             defomax = defomax, hgtcorr = False, gacoscorr = gacoscorr, pre_detrend = pre_detrend,
             cliparea_geo = cliparea_geo, outtif = outtif, prevest = prevest, prev_ramp = ifg_ml10['unw'],
             coh2var = coh2var, add_resid = True,  rampit=rampit, subtract_gacos = subtract_gacos,
             extweights = extweights, keep_coh_debug = keep_coh_debug, keep_coh_px = keep_coh_px,
-            tmpdir = tmpdir)
+            tmpdir = tmpdir, use_gamma = use_gamma)
         ifg_ml10 = 0
     return ifg_ml
 
