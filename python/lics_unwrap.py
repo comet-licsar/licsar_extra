@@ -137,7 +137,7 @@ class UnwOptions(object):
         for x in self.__dict__.items():
             print(x[0]+': '+str(x[1]))
 '''
-def cascade_unwrap(frame, pair, downtoml = 1, procdir = os.getcwd(), finalgoldstein = True,
+def cascade_unwrap(frame, pair, downtoml = 1, procdir = os.getcwd(), finalgoldstein = True, use_gamma = False,
                    only10 = True, smooth = False, thres=0.3, hgtcorr = True, defomax = 0.3,
                    outtif = None, cliparea_geo = None, subtract_gacos = False, dolocal = False, do_landmask=True):
     """Main function to unwrap a geocoded LiCSAR interferogram using a cascade approach.
@@ -182,12 +182,13 @@ def cascade_unwrap(frame, pair, downtoml = 1, procdir = os.getcwd(), finalgoldst
             print('processing cascade of ML'+str(i))
             ifg_mla = process_ifg(frame, pair, procdir = procpairdir, ml = i, fillby = 'gauss',
                     prev_ramp = ifg_mlc['unw'], defomax = 0.5, add_resid = False, hgtcorr = hgtcorr, 
-                    rampit=True,  dolocal = dolocal, goldstein = False, specmag = False, smooth = True, thres = 0.2, do_landmask = do_landmask)
+                    rampit=True,  dolocal = dolocal, goldstein = False, specmag = False,
+                    smooth = True, thres = 0.2, do_landmask = do_landmask)
             ifg_mlc = ifg_mla.copy(deep=True)
     # now do the final step
     ifg_ml = process_ifg(frame, pair, procdir = procpairdir, ml = downtoml, fillby = 'nearest',
                 prev_ramp = ifg_mlc['unw'], thres = thres, defomax = defomax, add_resid = True, 
-                hgtcorr = False, outtif=outtif, subtract_gacos = subtract_gacos, goldstein=finalgoldstein,
+                hgtcorr = False, outtif=outtif, subtract_gacos = subtract_gacos, goldstein=finalgoldstein, use_gamma = use_gamma,
                 cliparea_geo = cliparea_geo,  dolocal = dolocal, smooth=smooth, specmag = True, do_landmask = do_landmask)
     elapsed_time = time.time()-starttime
     hour = int(elapsed_time/3600)
@@ -329,7 +330,7 @@ def process_ifg(frame, pair, procdir = os.getcwd(),
         cliparea_geo = None, outtif = None, prevest = None, prev_ramp = None,
         coh2var = False, add_resid = True,  rampit=False, subtract_gacos = False, dolocal = False,
         extweights = None, extweights_mask_threshold = 0.25, keep_coh_debug = True, keep_coh_px = 0.25,
-        do_landmask = True):
+        do_landmask = True, use_gamma = False):
     """Main function to unwrap a geocoded LiCSAR interferogram. Works on JASMIN (but can be easily adapted for local use)
     
     Args:
@@ -434,7 +435,7 @@ def process_ifg(frame, pair, procdir = os.getcwd(),
     
     ifg_ml = process_ifg_core(ifg, 
         ml = ml, fillby = fillby, thres = thres, smooth = smooth, lowpass = lowpass, goldstein = goldstein, specmag = specmag,
-        defomax = defomax, hgtcorr = hgtcorr, gacoscorr = gacoscorr, pre_detrend = pre_detrend,
+        defomax = defomax, hgtcorr = hgtcorr, gacoscorr = gacoscorr, pre_detrend = pre_detrend, use_gamma = use_gamma,
         cliparea_geo = cliparea_geo, outtif = outtif, prevest = prevest, prev_ramp = prev_ramp,
         coh2var = coh2var, add_resid = add_resid,  rampit=rampit, subtract_gacos = subtract_gacos,
         extweights = extweights, extweights_mask_threshold = extweights_mask_threshold, keep_coh_debug = keep_coh_debug, keep_coh_px = keep_coh_px, tmpdir = tmpdir)
@@ -558,10 +559,10 @@ def process_ifg_core(ifg, tmpdir = os.getcwd(),
     """Core ifg unwrapping procedure
     Note: tmpdir should be place for unneeded products (please keep unique per pair)
     """
-    if goldstein:
-        # let's check and replace goldstein for the gamma's version if available
-        use_gamma = True
-    if use_gamma:
+    #if goldstein:
+    #    # let's check and replace goldstein for the gamma's version if available
+    #    use_gamma = True
+    if use_gamma and goldstein:
         # check for gamma commands
         if os.system('which adf2 >/dev/null 2>/dev/null') != 0:
             print('Warning: GAMMA SW not found, not using GAMMA ADF for filtering')
@@ -1114,9 +1115,10 @@ def process_ifg_core(ifg, tmpdir = os.getcwd(),
     return ifg_ml
 
 
-def process_frame(frame = 'dummy', ml = 10, thres = 0.3, smooth = False, cascade=False,
+def process_frame(frame = 'dummy', ml = 10, thres = 0.3,
+            smooth = False, cascade=False,
             hgtcorr = True, gacoscorr = True, only10 = True,
-            lowpass = False, goldstein = True, pre_detrend = False,
+            lowpass = False, goldstein = True, use_gamma = False, pre_detrend = False,
             cliparea_geo = None, pairsetfile = None, 
             export_to_tif = False, subtract_gacos = False,
             nproc = 1, dolocal = False, specmag = False, defomax = 0.3,
@@ -1132,6 +1134,7 @@ def process_frame(frame = 'dummy', ml = 10, thres = 0.3, smooth = False, cascade
         smooth (boolean): switch to use extra Gaussian filtering for 2-pass unwrapping, can be wrong - not preferred anymore.
         lowpass (boolean): switch to use lowpass filter (Gaussian-based, with masking high gradients and interpolating inbetween), preferred option
         goldstein (boolean): switch to use extra Goldstein filter - would cause longer run, but it is very recommended option to use
+        use_gamma (boolean): in combination to Goldstein=ON, it will use ADF2 if GAMMA software is available.
         cascade (boolean): switch to perform cascade unwrapping
         
         hgtcorr (boolean): switch to perform correction for height-phase correlation
@@ -1152,11 +1155,19 @@ def process_frame(frame = 'dummy', ml = 10, thres = 0.3, smooth = False, cascade
         gacosdir (str): path to directory with *pair*.sltd.geo.tif files
         freq (float): SAR carrier frequency (used only for metadata, i.e. later steps in LiCSBAS). default: Sentinel-1 carrier frequency
     """
-    if cascade and ml>9:
-        only10 = False
-    if cascade and ml==1:
-        # use 'more' steps if this is ml1
-        only10 = False
+    #if cascade and ml>9:
+    #    only10 = False
+    #if cascade and ml==1:
+    #    # use 'more' steps if this is ml1
+    #    only10 = False
+    if use_gamma and goldstein:
+        # check for gamma commands
+        if os.system('which adf2 >/dev/null 2>/dev/null') != 0:
+            print('Warning: GAMMA SW not found, not using GAMMA ADF for filtering, setting Goldstein instead')
+            use_gamma = False
+        else:
+            if thres == 0.35:
+                thres = 0.5  # just setting different default threshold for ADF2 outputs
     #if cascade and ml>1:
     #    print('error - the cascade approach is ready only for ML1')
     #    return False
@@ -1403,13 +1414,13 @@ def process_frame(frame = 'dummy', ml = 10, thres = 0.3, smooth = False, cascade
                     if not dolocal:
                         if cascade:
                             ifg_ml = cascade_unwrap(frame, pair, downtoml = ml, procdir = procdir, only10 = only10, 
-                                outtif = outtif, subtract_gacos = subtract_gacos, smooth = smooth, hgtcorr = hgtcorr, 
+                                outtif = outtif, subtract_gacos = subtract_gacos, smooth = smooth, use_gamma = use_gamma, hgtcorr = hgtcorr,
                                 cliparea_geo = cliparea_geo, thres = thres, finalgoldstein=goldstein, dolocal=dolocal, do_landmask=do_landmask)
                         else:
                             print('debug - all ok')
                             ifg_ml = process_ifg(frame, pair, procdir = procdir, ml = ml, hgtcorr = hgtcorr, fillby = fillby,   # nov 2022, orig was gauss
                                 thres = thres, defomax = defomax, add_resid = True, outtif = outtif, extweights = extweights,
-                                smooth = smooth,
+                                smooth = smooth, use_gamma = use_gamma,
                                 lowpass=lowpass, goldstein=goldstein, specmag = specmag, pre_detrend = pre_detrend,
                                 keep_coh_debug = keep_coh_debug, gacoscorr = gacoscorr, cliparea_geo = cliparea_geo,
                                 subtract_gacos = subtract_gacos, dolocal=dolocal, do_landmask = do_landmask,
@@ -1422,7 +1433,7 @@ def process_frame(frame = 'dummy', ml = 10, thres = 0.3, smooth = False, cascade
                                                  thres = thres, defomax = defomax, add_resid = True, outtif = outtif, extweights = extweights, smooth = smooth,
                                                  lowpass=lowpass, goldstein=goldstein, specmag = specmag, pre_detrend = pre_detrend,
                                                  keep_coh_debug = keep_coh_debug, gacoscorr = gacoscorr, cliparea_geo = cliparea_geo,
-                                                 subtract_gacos = subtract_gacos, cascade = cascade)
+                                                 subtract_gacos = subtract_gacos, cascade = cascade, use_gamma = use_gamma)
                     (ifg_ml.unw.where(ifg_ml.mask_full > 0).values).astype(np.float32).tofile(pair+'/'+pair+'.unw')
                     ((ifg_ml.coh.where(ifg_ml.mask > 0)*255).astype(np.byte).fillna(0).values).tofile(pair+'/'+pair+'.cc')
                     if 'conncomp' in ifg_ml:
