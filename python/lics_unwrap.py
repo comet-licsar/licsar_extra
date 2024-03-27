@@ -460,7 +460,7 @@ for p in pairs:
 def process_ifg_pair(phatif, cohtif, procpairdir = os.getcwd(),
         ml = 10, fillby = 'gauss', thres = 0.2, cascade = False, 
         smooth = False, lowpass = True, goldstein = True, specmag = False,
-        defomax = 0.6, hgtcorr = False, gacoscorr = True, pre_detrend = True,
+        defomax = 0.6, frame = '', hgtcorr = False, gacoscorr = True, pre_detrend = True,
         cliparea_geo = None, outtif = None, prevest = None, prev_ramp = None,
         coh2var = False, add_resid = True,  rampit=False, subtract_gacos = False,
         extweights = None, keep_coh_debug = True, keep_coh_px = 0.25, use_gamma = False):
@@ -480,7 +480,8 @@ def process_ifg_pair(phatif, cohtif, procpairdir = os.getcwd(),
         goldstein (boolean): use Goldstein filter (recommended to use, but might slow down the procedure)
         specmag (boolean): use spectral magnitude of the Goldstein filter (if it is on) as an experimental measure of coherence
         defomax (float): parameter to snaphu for maximum deformation in rad per 2pi cycle (DEFOMAX_CYCLE)
-        
+
+        frame (str): used only for hgtcorr and gacoscorr. works only within LiCSAR system
         hgtcorr (boolean): switch to perform correction for height-phase correlation
         gacoscorr (boolean): switch to apply GACOS corrections (if detected)
         pre_detrend (boolean): switch to apply detrending on wrapped phase to support unwrapping
@@ -515,9 +516,13 @@ def process_ifg_pair(phatif, cohtif, procpairdir = os.getcwd(),
         os.mkdir(os.path.join(procpairdir,'tmp_unwrap'))
     if not os.path.exists(tmpdir):
         os.mkdir(tmpdir)
-    # not ready now for gacos or hgt correlation
     gacoscorr = False
     hgtcorr = False
+    if frame != '':
+        if os.path.exists(os.path.join(os.environ['LiCSAR_public']), str(int(frame[:3])), frame):
+            print('WARNING - check for gacos/hgt not implemented in this function yet - TODO')
+    # else: not ready now for gacos or hgt correlation
+    #
     if not cascade:
         ifg_ml = process_ifg_core(ifg, 
             ml = ml, fillby = fillby, thres = thres, smooth = smooth, lowpass = lowpass, goldstein = goldstein, specmag = specmag,
@@ -676,7 +681,8 @@ def process_ifg_core(ifg, tmpdir = os.getcwd(),
                 if not os.path.exists(tmpadfdir):
                     os.mkdir(tmpadfdir)
                 #ifg_ml['filtpha'] = ifg_ml['pha']
-                ifg_ml['filtpha'], sp = adf_filter_xr(ifg_ml.pha, ifg_ml.coh, tempadfdir = tmpadfdir, blocklen=16) #, alpha=0.8)
+                print('debug: trying adf with blocklen 32, alpha 0.5 - previous attempt with blocklen 16 was TERRIBLE')
+                ifg_ml['filtpha'], sp = adf_filter_xr(ifg_ml.pha, ifg_ml.coh, tempadfdir = tmpadfdir, blocklen=32) #, alpha=0.8)
                 try:
                     shutil.rmtree(tmpadfdir)
                 except:
@@ -3404,7 +3410,7 @@ def goldstein_AHML(block, alpha=0.8, kernelsigma=0.75, mask_nyquist=False, retur
     return cpxfilt
 
 
-def adf_filter_xr(inpha, incoh, tempadfdir = 'tempadfdir', blocklen=16, alpha=0.5):
+def adf_filter_xr(inpha, incoh, tempadfdir = 'tempadfdir', blocklen=32, alpha=0.5):
     """Gamma ADF filter incorporated here
 
     Args:
