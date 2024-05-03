@@ -1368,8 +1368,8 @@ def process_frame(frame = 'dummy', ml = 10, thres = 0.3,
                 return False
     # functions for multiprocessing
     def check_and_process_ifg(pair):
-        if os.path.exists(os.path.join(geoifgdir, pair, pair+'.geo.diff_unfiltered.tif')):
-            ext = 'diff_unfiltered'
+        if os.path.exists(os.path.join(geoifgdir, pair, pair+'.geo.diff_unfiltered_pha.tif')):
+            ext = 'diff_unfiltered_pha'
         else:
             ext = 'diff_pha'
         if not os.path.exists(os.path.join(geoifgdir, pair, pair+'.geo.'+ext+'.tif')):
