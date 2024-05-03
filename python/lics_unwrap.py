@@ -1325,7 +1325,7 @@ def process_frame(frame = 'dummy', ml = 10, thres = 0.3,
         use_amp_stab = False
     # TODO(?): nullifying ext weights based on some well-defined treshold (aka GMTSAR's PS-SB approach....)
     # currently hardcoded as extraweights_* param in process_ifg_core - in dev.
-    if not type(extweight) == type(None):
+    if not type(extweights) == type(None):
         try:
             extweights = extweights.values # make it just ndarray
         except:
