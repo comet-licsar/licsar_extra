@@ -459,7 +459,7 @@ for p in pairs:
 
 def process_ifg_pair(phatif, cohtif, procpairdir = os.getcwd(),
         ml = 10, fillby = 'gauss', thres = 0.2, cascade = False, 
-        smooth = False, lowpass = True, goldstein = True, specmag = False,
+        smooth = False, lowpass = True, goldstein = True, specmag = False, spatialmask_km = 2,
         defomax = 0.6, frame = '', hgtcorr = False, gacoscorr = True, pre_detrend = True,
         cliparea_geo = None, outtif = None, prevest = None, prev_ramp = None,
         coh2var = False, add_resid = True,  rampit=False, subtract_gacos = False,
@@ -472,7 +472,7 @@ def process_ifg_pair(phatif, cohtif, procpairdir = os.getcwd(),
         
         ml (int): multilooking factor used to reduce the interferogram in lon/lat
         fillby (string): algorithm to fill gaps. use one of values: ``'gauss'``, ``'nearest'``, ``'none'`` (where ``'none'`` would only fill NaNs by zeroes)
-        thres (float): threshold between 0-1 for gaussian-based coherence-like measure (spatial phase consistence?); higher number - more is masked prior to unwrapping
+        thres (float): threshold between 0-1 for coherence (or a coherence-like measure if using either goldstein or (gaussian) smooth filter); higher number - more is masked prior to unwrapping
         cascade (boolean): whether to use the multiscale/cascade approach
         
         smooth (boolean): switch to use extra Gaussian filtering for 2-pass unwrapping (not recommended anymore)
@@ -480,6 +480,7 @@ def process_ifg_pair(phatif, cohtif, procpairdir = os.getcwd(),
         goldstein (boolean): use Goldstein filter (recommended to use, but might slow down the procedure)
         specmag (boolean): use spectral magnitude of the Goldstein filter (if it is on) as an experimental measure of coherence
         defomax (float): parameter to snaphu for maximum deformation in rad per 2pi cycle (DEFOMAX_CYCLE)
+        spatialmask_km (float): removing small clusters of pixels below spatialmask_km**2 - set 0 to disable (and keep random pixels with 'coherence by luck')
 
         frame (str): used only for hgtcorr and gacoscorr. works only within LiCSAR system
         hgtcorr (boolean): switch to perform correction for height-phase correlation
@@ -560,7 +561,8 @@ def process_ifg_core(ifg, tmpdir = os.getcwd(),
         cliparea_geo = None, outtif = None, prevest = None, prev_ramp = None,
         coh2var = False, add_resid = True,  rampit=False, subtract_gacos = False,
         extweights = None, extweights_mask_threshold = 0.25, keep_coh_debug = True,
-        use_gamma = False, keep_coh_px = 0.25):
+        use_gamma = False, keep_coh_px = 0.25,
+        spatialmask_km = 2):
     """Core ifg unwrapping procedure
     Note: tmpdir should be place for unneeded products (please keep unique per pair)
     """
@@ -789,36 +791,41 @@ def process_ifg_core(ifg, tmpdir = os.getcwd(),
         # so now we have it all done - let's return origpha from pre-filt state
         ifg_ml['pha']=ifg_ml['origpha']
     else:
-        # now let's do the old way (not really recommended anymore, as the gaussian would not follow the phase gradient as fine as goldstein filter..
-        # if not, do the original 'smooth' approach, just to get proper mask
-        #print('finally, filter using (adapted) gauss filter')
-        if ml > 2 and not extweights_mask_threshold:
-            calc_coh_from_delta = True  # we don't really want to mask too much if we use ampstab for masking
+        if smooth:
+            # now let's do the old way (not really recommended anymore, as the gaussian would not follow the phase gradient as fine as goldstein filter..
+            # if not, do the original 'smooth' approach, just to get proper mask
+            #print('finally, filter using (adapted) gauss filter')
+            if ml > 2 and not extweights_mask_threshold:
+                calc_coh_from_delta = True  # we don't really want to mask too much if we use ampstab for masking
+            else:
+                # that part takes ages and it is not that big improvement..
+                calc_coh_from_delta = False
+            # calculate gauss_coh, as a measure of spatial consistence
+            # ok, but let's have the radius of Gaussian kernel tightier - just 10x10 pixels, i.e.
+            radius = 5*get_resolution(ifg_ml)
+            ifg_ml = filter_ifg_ml(ifg_ml, calc_coh_from_delta = calc_coh_from_delta, radius = radius)
+            ifg_ml['consistence'] = ifg_ml['gauss_coh'].copy()
         else:
-            # that part takes ages and it is not that big improvement..
-            calc_coh_from_delta = False
-        # calculate gauss_coh, as a measure of spatial consistence
-        # ok, but let's have the radius of Gaussian kernel tightier - just 10x10 pixels, i.e.
-        radius = 5*get_resolution(ifg_ml)
-        ifg_ml = filter_ifg_ml(ifg_ml, calc_coh_from_delta = calc_coh_from_delta, radius = radius)
-        ifg_ml['consistence'] = ifg_ml['gauss_coh'].copy()
+            ifg_ml['consistence'] = ifg_ml['coh']
         mask_gauss = (ifg_ml.consistence > thres)*1
         if keep_coh_px:
             #return (unmask) pixels that have coh > keep_coh_px (default=0.25)
             mask_gauss.values[mask_gauss.values == 0] = 1*(ifg_ml.coh > keep_coh_px).values[mask_gauss.values == 0]
         ifg_ml['mask_coh'] = mask_gauss.fillna(0)
-        # additionally remove islands of size smaller than... 2x2 km...?
-        lenthres = 2000 # m
-        mlres = get_resolution(ifg_ml, in_m=True)
-        maxpx = 8*8
-        pixels = int(round(lenthres / mlres))
-        pixelsno = min(pixels ** 2, maxpx)
-        # or scale it just in pixels, so 7x7 px^2 area
-        #pixelsno = 7*7
-        npa = ifg_ml['mask_coh'].where(ifg_ml['mask_coh']==1).where(ifg_ml['mask']==1).values
         ifg_ml['mask_full'] = ifg_ml['mask_coh']
         if type(extweights) == type(None):
-            ifg_ml['mask_full'].values = remove_islands(npa, pixelsno)
+            if spatialmask_km > 0:
+                # additionally remove islands of size smaller than... 
+                #lenthres = 2000 # m
+                lenthres = spatialmask_km*1000
+                mlres = get_resolution(ifg_ml, in_m=True)
+                maxpx = 8*8
+                pixels = int(round(lenthres / mlres))
+                pixelsno = min(pixels ** 2, maxpx)
+                # or scale it just in pixels, so 7x7 px^2 area
+                #pixelsno = 7*7
+                npa = ifg_ml['mask_coh'].where(ifg_ml['mask_coh']==1).where(ifg_ml['mask']==1).values
+                ifg_ml['mask_full'].values = remove_islands(npa, pixelsno)
         ifg_ml['mask_full'] = ifg_ml['mask_full'].fillna(0).astype(np.int8)
         #ifg_ml['mask_coh'] = ifg_ml['mask'].where(ifg_ml.gauss_coh > thres).where(ifg_ml.coh > thres).fillna(0)
     #if lowpass:
