@@ -1842,6 +1842,8 @@ def load_from_nparrays(inpha,incoh,maskthres = 0.05):
     '''
     if incoh.max() > 2:
         incoh = incoh/255
+    if inpha.max() > 4:
+        inpha = (inpha - 1) * 2 * np.pi/254 - np.pi
     inmask = incoh.copy()
     inmask = np.byte(incoh > maskthres) # this will mask coh=0 that we consider 'nan'
     ifg = xr.Dataset()
@@ -1872,6 +1874,8 @@ def load_from_tifs(phatif, cohtif, landmask_tif = None, cliparea_geo = None):
     incoh = load_tif2xr(cohtif)
     if incoh.max() > 2:
         incoh.values = incoh.values/255
+    if inpha.max() > 4:
+        inpha.values = (inpha.values - 1) * 2 * np.pi/254 - np.pi
     inmask = incoh.copy(deep=True)
     inmask.values = np.byte(incoh > 0)
     if landmask_tif:
@@ -1959,7 +1963,10 @@ def load_ifg(frame, pair, unw=True, dolocal=False, mag=True, cliparea_geo = None
     # load the files
     inpha = load_tif2xr(ifg_pha_file)
     incoh = load_tif2xr(coh_file)
-    incoh.values = incoh.values/255
+    if incoh.max() > 2:
+        incoh.values = incoh.values/255
+    if inpha.max() > 4:
+        inpha.values = (inpha.values - 1) * 2 * np.pi/254 - np.pi
     inmask = incoh.copy(deep=True)
     inmask.values = np.byte(incoh > 0)
     if do_landmask and os.path.exists(landmask_file):
