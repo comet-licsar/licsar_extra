@@ -2175,9 +2175,10 @@ def lowpass_gauss(ifg_ml, thres=0.35, defomax=0, use_gold = True, goldwin=16, pr
     #ifg_ml['pha'].values = gaussfill(dapha, sigma=2)   # low pass filter   # gives ugly results
     # unwrap and reduce that
     coh = ifg_ml.coh.fillna(0).values
-    tempar_mag1 = np.ones_like(ifg_ml.pha)
+    #tempar_mag1 = np.ones_like(ifg_ml.pha)
     #cpxarr = magpha2RI_array(tempar_mag1, ifg_ml.pha.values)
-    cpx = np.complex64(magpha2RI_array(tempar_mag1, ifg_ml.pha.fillna(0).values))
+    #cpx = np.complex64(magpha2RI_array(tempar_mag1, ifg_ml.pha.fillna(0).values))
+    cpx = np.complex64(pha2cpx(ifg_ml.pha.fillna(0).values))
     #unw = unwrap_np(cpx, coh, mask = mask, defomax = defomax, deltemp=True)      # it doesn't work well with mask!
     unw = unwrap_np(cpx, coh, defomax = 0, deltemp=True, tmpdir=tmpdirunw)
     unw = filter_nan_gaussian_conserving(unw, sigma=4, trunc=4) # a stronger filter should help...
@@ -3276,10 +3277,11 @@ def filter_ifg_ml(ifg_ml, calc_coh_from_delta = False, radius = 1000, trunc = 4)
     #width_filter = 2*radius_px
     sigma = (radius_px - 1.5)/trunc
     #normalise mag
-    tempar_mag1 = np.ones_like(ifg_ml.pha)
-    if 'cpx' not in ifg_ml:
-        ifg_ml['cpx'] = ifg_ml['pha'].copy()
-    ifg_ml['cpx'].values = magpha2RI_array(tempar_mag1, ifg_ml.pha.values)
+    #tempar_mag1 = np.ones_like(ifg_ml.pha)
+    #if 'cpx' not in ifg_ml:
+    #    ifg_ml['cpx'] = ifg_ml['pha'].copy()
+    #ifg_ml['cpx'].values = magpha2RI_array(tempar_mag1, ifg_ml.pha.values)
+    ifg_ml['cpx'] =  pha2cpx(ifg_ml['pha'])
     print('filter using gauss filter')
     ifg_ml['gauss_cpx'] = filter_cpx_gauss(ifg_ml, sigma = sigma, trunc = trunc)
     ifg_ml['gauss_pha'] = 0*ifg_ml['pha']
