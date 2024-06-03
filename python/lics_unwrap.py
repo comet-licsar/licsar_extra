@@ -915,9 +915,10 @@ def process_ifg_core(ifg, tmpdir = os.getcwd(),
     if not goldstein:
         #exporting for snaphu
         #normalise mag from the final pha
-        tempar_mag1 = np.ones_like(ifg_ml.pha)
-        cpxarr = magpha2RI_array(tempar_mag1, ifg_ml.pha.fillna(0).values) #no need to fillna, but just in case...
-        ifg_ml['gauss_cpx'].values = cpxarr
+        #tempar_mag1 = np.ones_like(ifg_ml.pha)
+        #cpxarr = magpha2RI_array(tempar_mag1, ifg_ml.pha.fillna(0).values) #no need to fillna, but just in case...
+        ifg_ml['gauss_cpx'] = pha2cpx(ifg_ml['pha'])
+        #ifg_ml['gauss_cpx'].values = cpxarr
         print('unwrapping by snaphu')
         binmask= os.path.join(tmpdir,'gaussmask.bin')
         #bincoh = os.path.join(tmpdir,'gausscoh.bin')
@@ -3683,7 +3684,8 @@ def nyquistmask(block):
 
 
 def pha2cpx(pha):
-    """Creates normalised cpx interferogram from phase
+    """Creates normalised cpx interferogram from phase.
+    (if xr.DataArray, it will again return xr.DataArray)
     """
     return np.exp(1j*pha)
 
