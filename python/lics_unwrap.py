@@ -843,11 +843,12 @@ def process_ifg_core(ifg, tmpdir = os.getcwd(),
         print('filling through Gaussian kernel')
         kernel = Gaussian2DKernel(x_stddev=2)
         # create a "fixed" image with NaNs replaced by interpolated values
-        tempar_mag1 = np.ones_like(ifg_ml.pha)
+        #tempar_mag1 = np.ones_like(ifg_ml.pha)
         #cpxarr = magpha2RI_array(tempar_mag1, ifg_ml.pha.fillna(0).values)
-        cpxarr = magpha2RI_array(tempar_mag1, ifg_ml.pha.values)
-        ifg_ml['cpx_tofill'] = ifg['cpx']
-        ifg_ml['cpx_tofill'].values = cpxarr
+        #cpxarr = magpha2RI_array(tempar_mag1, ifg_ml.pha.values)
+        #ifg_ml['cpx_tofill'] = ifg['cpx']
+        #ifg_ml['cpx_tofill'].values = cpxarr
+        ifg_ml['cpx_tofill'] = pha2cpx(ifg_ml['pha'])
         # using only extent - avoiding landmask as rivers would have problems
         #tofill = ifg_ml['cpx_tofill'].where(ifg_ml.mask_coh.where(ifg_ml.mask == 1).fillna(1) == 1)
         #tofill = ifg_ml['cpx_tofill'].where(ifg_ml.mask_coh.where(ifg_ml.mask_extent == 1).fillna(1) == 1)
@@ -870,8 +871,8 @@ def process_ifg_core(ifg, tmpdir = os.getcwd(),
                 #tofillpha = ifg_ml.pha.where(ifg_ml.mask_full.where(ifg_ml.mask_extent == 1).fillna(1) == 1)
                 ifg_ml['pha'].values = interpolate_nans(ifg_ml['pha'].values, method='nearest')
             else:
-                cpxarr = magpha2RI_array(tempar_mag1, ifg_ml.pha.values)
-                ifg_ml['cpx_tofill'].values = cpxarr
+                #cpxarr = magpha2RI_array(tempar_mag1, ifg_ml.pha.values)
+                ifg_ml['cpx_tofill'] = pha2cpx(ifg_ml['pha']) #.values = cpxarr
                 tofill = ifg_ml['cpx_tofill']
                 tofillR = np.real(tofill)
                 tofillI = np.imag(tofill)
@@ -1006,9 +1007,10 @@ def process_ifg_core(ifg, tmpdir = os.getcwd(),
         #ifg_ml[daname] = ifg_ml[daname]*ifg_ml['mask_coh']
         ifg_ml[daname] = ifg_ml[daname]*ifg_ml['mask_full']
         #print('unwrap also residuals from the filtered cpx, and add to the final unw - mask only waters..')
-        cpxarr = magpha2RI_array(tempar_mag1, ifg_ml.origpha.fillna(0).where(ifg_ml.mask == 1).values)
-        ifg_ml['origcpx'] = ifg_ml['gauss_cpx'] #.copy(deep=True)
-        ifg_ml['origcpx'].values = cpxarr
+        #cpxarr = magpha2RI_array(tempar_mag1, ifg_ml.origpha.fillna(0).where(ifg_ml.mask == 1).values)
+        ifg_ml['origcpx'] = pha2cpx(ifg_ml.origpha.fillna(0).where(ifg_ml.mask == 1))
+        #ifg_ml['origcpx'] = ifg_ml['gauss_cpx'] #.copy(deep=True)
+        #ifg_ml['origcpx'].values = cpxarr
         if add_resid:
             print('unwrapping residuals and adding back to the final unw output')
             # maybe can use this somehow? by yma. i checked and it is correct
@@ -1092,10 +1094,11 @@ def process_ifg_core(ifg, tmpdir = os.getcwd(),
         if 'origpha_noremovals' in ifg_ml:
             residpha = wrap2phase(wrap2phase(ifg_ml['unw'].fillna(0).values) - ifg_ml.origpha_noremovals)
         else:
-            tempar_mag1 = np.ones_like(ifg_ml.pha)
-            cpxarr = magpha2RI_array(tempar_mag1, wrap2phase(ifg_ml['unw'].fillna(0).values))
-            ifg_ml['unwcpx'] = ifg_ml['gauss_cpx']
-            ifg_ml['unwcpx'].values = cpxarr
+            #tempar_mag1 = np.ones_like(ifg_ml.pha)
+            #cpxarr = magpha2RI_array(tempar_mag1, wrap2phase(ifg_ml['unw'].fillna(0).values))
+            #ifg_ml['unwcpx'] = ifg_ml['gauss_cpx']
+            #ifg_ml['unwcpx'].values = cpxarr
+            ifg_ml['unwcpx'] = pha2cpx(ifg_ml['unw'].fillna(0))
             ifg_ml['resid_final'] = ifg_ml.unwcpx * ifg_ml.origcpx.conjugate() #* ifg_ml.mask_full
             # but ignoring the overall shift as we do the median shifting before
             residpha = np.angle(ifg_ml['resid_final'].where(ifg_ml.mask_full>0))
@@ -2053,9 +2056,9 @@ def load_ifg(frame, pair, unw=True, dolocal=False, mag=True, cliparea_geo = None
 
 
 def gaussfill(dapha, sigma=2):
-    tempar_mag1 = np.ones_like(dapha)
+    #tempar_mag1 = np.ones_like(dapha)
     kernel = Gaussian2DKernel(x_stddev=sigma)
-    cpxarr = magpha2RI_array(tempar_mag1, dapha.values)
+    #cpxarr = magpha2RI_array(tempar_mag1, dapha.values)
     i=1
     while np.max(np.isnan(dapha.values)):
         i = i+1
@@ -2065,14 +2068,16 @@ def gaussfill(dapha, sigma=2):
             print('filling by nearest neighbours')
             dapha.values = interpolate_nans(dapha.values, method='nearest')
         else:
-            tofill = magpha2RI_array(tempar_mag1, dapha.values)
+            #tofill = magpha2RI_array(tempar_mag1, dapha.values)
+            tofill = pha2cpx(dapha.values)
             tofillR = np.real(tofill)
             tofillI = np.imag(tofill)
             filledR = interpolate_replace_nans(tofillR, kernel)
             filledI = interpolate_replace_nans(tofillI, kernel)
             dapha.values = np.angle(filledR + 1j*filledI)
     # but i need to finally smooth it a bit
-    cpxarr = magpha2RI_array(tempar_mag1, dapha.values)
+    #cpxarr = magpha2RI_array(tempar_mag1, dapha.values)
+    cpxarr = pha2cpx(dapha.values)
     gauss_cpx = filter_nan_gaussian_conserving(cpxarr, sigma=sigma*1.5, trunc=4)
     dapha.values = np.angle(gauss_cpx)
     return dapha
