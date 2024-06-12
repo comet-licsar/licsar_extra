@@ -1855,7 +1855,8 @@ def load_from_nparrays(inpha,incoh,maskthres = 0.05):
         incoh = incoh/255
     if inpha.max() > 4:
         #inpha = inpha.where(inpha != 0)
-        inpha = (inpha - 1)/254 * 2 * np.pi - np.pi
+        #inpha = (inpha - 1)/254 * 2 * np.pi - np.pi
+        inpha = np.pi * ((inpha-1)/127 - 1)
     inmask = incoh.copy()
     inmask = np.byte(incoh > maskthres) # this will mask coh=0 that we consider 'nan'
     ifg = xr.Dataset()
