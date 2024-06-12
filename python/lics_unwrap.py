@@ -3082,7 +3082,9 @@ def export_xr2tif(xrda, tif, lonlat = True, debug = True, dogdal = True):
     xrda = xrda.rio.write_crs(coordsys, inplace=True)
     if dogdal:
         xrda.rio.to_raster(tif+'tmp.tif', compress='deflate')
-        cmd = 'gdalwarp -t_srs EPSG:4326 {0} {1}'.format(tif+'tmp.tif', tif)
+        cmd = 'gdalwarp -t_srs EPSG:4326 {0} {1}'.format(tif+'tmp.tif', tif) # will fix some issues
+        runcmd(cmd, printcmd = False)
+        cmd = 'mv {0} {1}; gdal_translate -of GTiff -co COMPRESS=DEFLATE -co PREDICTOR=3 {1} {0}'.format(tif, tif+'tmp.tif') # will compress better
         runcmd(cmd, printcmd = False)
         os.remove(tif+'tmp.tif')
     else:
