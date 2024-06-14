@@ -3051,7 +3051,7 @@ def correct_hgt(ifg_mlc, blocklen = 20, tmpdir = os.getcwd(), dounw = True, num_
     return out, outype
 
 
-def export_xr2tif(xrda, tif, lonlat = True, debug = True, dogdal = True):
+def export_xr2tif(xrda, tif, lonlat = True, debug = True, dogdal = True, refto = None):
     """Exports xarray dataarray to a geotiff
     
      Args:
@@ -3059,7 +3059,8 @@ def export_xr2tif(xrda, tif, lonlat = True, debug = True, dogdal = True):
         tif (string): path to output tif file
         lonlat (boolean): are the dimensions named as lon, lat?
         debug (boolean): just load it as float32
-        dogdal (boolean): after exporting, perform gdalwarp (fix for potential issues in output geotiff)
+        dogdal (boolean): after exporting, perform gdalwarp (fix for potential issues in output geotiff) and gdal_translate to better compress
+        refto (str): path to the (usually hgt) file to apply gdalwarp2match.py to. If None, it will not apply
     """
     import rioxarray
     #coordsys = xrda.crs.split('=')[1]
@@ -3082,13 +3083,21 @@ def export_xr2tif(xrda, tif, lonlat = True, debug = True, dogdal = True):
     xrda = xrda.rio.write_crs(coordsys, inplace=True)
     if dogdal:
         xrda.rio.to_raster(tif+'tmp.tif', compress='deflate')
-        cmd = 'gdalwarp -t_srs EPSG:4326 {0} {1}'.format(tif+'tmp.tif', tif) # will fix some issues
-        runcmd(cmd, printcmd = False)
+        if refto:
+            cmd = 'gdalwarp2match.py {0} {1} {2}; mv {2} {0}'.format(tif+'tmp.tif', refto, tif)
+            runcmd(cmd, printcmd=False)
+        else:
+            cmd = 'gdalwarp -t_srs EPSG:4326 {0} {1}'.format(tif + 'tmp.tif', tif)  # will fix some issues
+            runcmd(cmd, printcmd=False)
         cmd = 'mv {0} {1}; gdal_translate -of GTiff -co COMPRESS=DEFLATE -co PREDICTOR=3 {1} {0}'.format(tif, tif+'tmp.tif') # will compress better
         runcmd(cmd, printcmd = False)
-        os.remove(tif+'tmp.tif')
+        if os path.exists(tif+'tmp.tif'):
+            os.remove(tif+'tmp.tif')
+        if os path.exists(tif+'tmp2.tif'):
+            os.remove(tif + 'tmp2.tif')
     else:
         xrda.rio.to_raster(tif, compress='deflate')
+
 
 
 def create_eqa_file(eqafile,wid,nlines,cor_lat,cor_lon,post_lat,post_lon):
