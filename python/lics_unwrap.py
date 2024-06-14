@@ -3091,9 +3091,9 @@ def export_xr2tif(xrda, tif, lonlat = True, debug = True, dogdal = True, refto =
             runcmd(cmd, printcmd=False)
         cmd = 'mv {0} {1}; gdal_translate -of GTiff -co COMPRESS=DEFLATE -co PREDICTOR=3 {1} {0}'.format(tif, tif+'tmp.tif') # will compress better
         runcmd(cmd, printcmd = False)
-        if os path.exists(tif+'tmp.tif'):
+        if os.path.exists(tif+'tmp.tif'):
             os.remove(tif+'tmp.tif')
-        if os path.exists(tif+'tmp2.tif'):
+        if os.path.exists(tif+'tmp2.tif'):
             os.remove(tif + 'tmp2.tif')
     else:
         xrda.rio.to_raster(tif, compress='deflate')
