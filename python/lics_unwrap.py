@@ -1927,7 +1927,9 @@ def load_from_tifs(phatif, cohtif, landmask_tif = None, cliparea_geo = None):
     return ifg
 
 
-def load_ifg(frame, pair, unw=True, dolocal=False, mag=True, cliparea_geo = None, prefer_unfiltered = True, do_landmask = True):
+def load_ifg(frame, pair, unw=True, dolocal=False, mag=True,
+             cliparea_geo = None, prefer_unfiltered = True, do_landmask = True,
+             stdout = True):
     if dolocal:
         geoifgdir = 'GEOC'
         if not os.path.exists(geoifgdir):
@@ -1961,16 +1963,19 @@ def load_ifg(frame, pair, unw=True, dolocal=False, mag=True, cliparea_geo = None
         ext = 'diff_unfiltered_pha'
         ifg_pha_file = os.path.join(geoifgdir, pair + '.geo.' + ext + '.tif')
         if not os.path.exists(ifg_pha_file):
-            print('no unfiltered ifg exists here - loading the filtered diff_pha instead')
+            if stdout:
+                print('no unfiltered ifg exists here - loading the filtered diff_pha instead')
             ext = 'diff_pha'
             # will use only the filtered ifgs now..
             ifg_pha_file = os.path.join(geoifgdir,pair+'.geo.'+ext+'.tif')
         else:
-            print('loading the unfiltered ifg')
+            if stdout:
+                print('loading the unfiltered ifg')
     else:
         ext = 'diff_pha'
         # will use only the filtered ifgs now..
-        print('loading the filtered diff_pha')
+        if stdout:
+            print('loading the filtered diff_pha')
         ifg_pha_file = os.path.join(geoifgdir, pair + '.geo.' + ext + '.tif')
     coh_file = os.path.join(geoifgdir,pair+'.geo.cc.tif')
     #landmask_file = os.path.join(geoframedir,'metadata',frame+'.geo.landmask.tif')
@@ -2019,7 +2024,8 @@ def load_ifg(frame, pair, unw=True, dolocal=False, mag=True, cliparea_geo = None
                     # but we will use only average here, for practical purposes - should be ok
                     inmag = (load_tif2xr(epochmli)+inmag)/2
         if type(inmag) == type(False):
-            print('no epoch mlis found, not using magnitude for pair '+pair)
+            if stdout:
+                print('no epoch mlis found, not using magnitude for pair '+pair)
         else:
             ifg['mag'] = ifg['pha']
             ifg['mag'].values = inmag.values
@@ -2036,18 +2042,21 @@ def load_ifg(frame, pair, unw=True, dolocal=False, mag=True, cliparea_geo = None
                 ifg['U'].values = inU.values
                 #print('debug l 1730: using U')
         except:
-            print('ERROR in importing heights!')
-            #hgtcorr = False
+            if stdout:
+                print('ERROR in importing heights!')
+                #hgtcorr = False
     if cliparea_geo:
         minclipx, maxclipx, minclipy, maxclipy = cliparea_geo.split('/')
         minclipx, maxclipx, minclipy, maxclipy = float(minclipx), float(maxclipx), float(minclipy), float(maxclipy)
         if minclipy > maxclipy:
-            print('you switched min max in crop coordinates (latitude). fixing')
+            if stdout:
+                print('you switched min max in crop coordinates (latitude). fixing')
             tmpcl = minclipy
             minclipy=maxclipy
             maxclipy=tmpcl
         if minclipx > maxclipx:
-            print('you switched min max in crop coordinates (longitude). fixing')
+            if stdout:
+                print('you switched min max in crop coordinates (longitude). fixing')
             tmpcl = minclipx
             minclipx=maxclipx
             maxclipx=tmpcl
