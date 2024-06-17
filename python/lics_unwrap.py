@@ -1963,8 +1963,8 @@ def load_ifg(frame, pair, unw=True, dolocal=False, mag=True,
         ext = 'diff_unfiltered_pha'
         ifg_pha_file = os.path.join(geoifgdir, pair + '.geo.' + ext + '.tif')
         if not os.path.exists(ifg_pha_file):
-            if stdout:
-                print('no unfiltered ifg exists here - loading the filtered diff_pha instead')
+            #if stdout:
+            print('WARNING: no unfiltered ifg exists here - loading the filtered diff_pha instead')
             ext = 'diff_pha'
             # will use only the filtered ifgs now..
             ifg_pha_file = os.path.join(geoifgdir,pair+'.geo.'+ext+'.tif')
