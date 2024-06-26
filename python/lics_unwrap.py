@@ -1931,24 +1931,29 @@ def load_ifg(frame, pair, unw=True, dolocal=False, mag=True,
              cliparea_geo = None, prefer_unfiltered = True, do_landmask = True,
              stdout = True):
     if dolocal:
-        geoifgdir = 'GEOC'
-        if not os.path.exists(geoifgdir):
-            geoifgdir = '../GEOC'
-            if not os.path.exists(geoifgdir):
+        geoframedir = 'GEOC'
+        if not os.path.exists(geoframedir):
+            geoframedir = '../GEOC'
+            if not os.path.exists(geoframedir):
                 print('ERROR: the GEOC directory does not exist, cancelling')
                 return False
-        geoifgdir = os.path.join(geoifgdir,pair)
-        geoepochsdir = geoifgdir+'.MLI'
+        geoifgdir = os.path.join(geoframedir,pair)
+        geoepochsdir = geoframedir+'.MLI'
         try:
-            hgtfile = glob.glob(geoifgdir+'/*.geo.hgt.tif')[0]
+            hgtfile = glob.glob(geoframedir+'/*.geo.hgt.tif')[0]
         except:
             hgtfile = 'noex'
         try:
-            Ufile = glob.glob(geoifgdir+'/*.geo.U.tif')[0]
+            Ufile = glob.glob(geoframedir+'/*.geo.U.tif')[0]
         except:
             Ufile = 'noex'
-        landmask_file = os.path.join(geoifgdir,frame+'.geo.landmask.tif')
-        #print('debug l 1662: using U')
+        landmask_file = os.path.join(geoframedir,frame+'.geo.landmask.tif')
+        if not os.path.exists(landmask_file):
+            try:
+                landmask_file = glob.glob(geoframedir+'/*.geo.landmask.tif')[0]
+            except:
+                landmask_file = 'dummy'
+            #print('debug l 1662: using U')
     else:
         pubdir = os.environ['LiCSAR_public']
         geoframedir = os.path.join(pubdir, str(int(frame[:3])), frame)
@@ -1985,6 +1990,7 @@ def load_ifg(frame, pair, unw=True, dolocal=False, mag=True,
     if incoh.max() > 2:
         incoh.values = incoh.values/255
     if inpha.max() > 4:
+        # in case we compressed this, stretching the 2 pi to 1-255 (0 for NaN)
         inpha = inpha.where(inpha != 0)
         inpha.values = (inpha.values - 1)/254 * 2 * np.pi - np.pi
     inmask = incoh.copy(deep=True)
