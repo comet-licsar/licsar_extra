@@ -2729,12 +2729,12 @@ def make_gacos_correction(frame, pair, dolocal = False):
     if dolocal:
         gacosdir = 'GACOS'
         if not os.path.exists(gacosdir):
-            geoifgdir = '../GACOS'
+            gacosdir = '../GACOS'
             if not os.path.exists(gacosdir):
                 print('ERROR: the GACOS directory does not exist in local folder. trying find in LiCSAR db')
                 dolocal = False
-        gacos1 = os.path.join(gacosdir,epoch1,epoch1+'.sltd.geo.tif')
-        gacos2 = os.path.join(gacosdir,epoch2,epoch2+'.sltd.geo.tif')
+        gacos1 = os.path.join(gacosdir,epoch1+'.sltd.geo.tif')
+        gacos2 = os.path.join(gacosdir,epoch2+'.sltd.geo.tif')
     if not dolocal:
         pubdir = os.environ['LiCSAR_public']
         geoframedir = os.path.join(pubdir,str(int(frame[:3])),frame)
