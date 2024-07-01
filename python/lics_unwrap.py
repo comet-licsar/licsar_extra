@@ -553,7 +553,7 @@ def process_ifg_pair(phatif, cohtif, procpairdir = os.getcwd(),
             goldstein = False, specmag = specmag,
             defomax = defomax, hgtcorr = hgtcorr, gacoscorr = gacoscorr, pre_detrend = pre_detrend,
             cliparea_geo = cliparea_geo, outtif = None, prevest = prevest, prev_ramp = prev_ramp,
-            coh2var = coh2var, add_resid = False,  rampit=True, subtract_gacos = subtract_gacos,
+            coh2var = coh2var, add_resid = False,  rampit=True, subtract_gacos = False,
             extweights = extweights, keep_coh_debug = keep_coh_debug, keep_coh_px = keep_coh_px,
             tmpdir = tmpdir, use_gamma = use_gamma)
         ifg_ml = process_ifg_core(ifg, 
