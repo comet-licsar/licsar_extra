@@ -517,11 +517,24 @@ def process_ifg_pair(phatif, cohtif, procpairdir = os.getcwd(),
         os.mkdir(os.path.join(procpairdir,'tmp_unwrap'))
     if not os.path.exists(tmpdir):
         os.mkdir(tmpdir)
-    gacoscorr = False
-    hgtcorr = False
-    if frame != '':
-        if os.path.exists(os.path.join(os.environ['LiCSAR_public']), str(int(frame[:3])), frame):
-            print('WARNING - check for gacos/hgt not implemented in this function yet - TODO')
+    # overcoming issues:
+    pair = procpairdir.split('/')[-1]
+    if gacoscorr and ('_' in pair):
+        gacosdiff = make_gacos_correction(frame,pair,dolocal = True)
+        if not type(gacosdiff) == type(False):
+            print('GACOS data found, using to improve unwrapping')
+            ifg['gacos'] = ifg.pha
+            ifg['gacos'] = gacosdiff.interp_like(ifg['gacos'] ,method='nearest')
+            gacosdiff = None
+        else:
+            gacoscorr = False
+    else:
+        gacoscorr = False
+        hgtcorr = False
+    #
+    #if frame != '':
+    #    if os.path.exists(os.path.join(os.environ['LiCSAR_public']), str(int(frame[:3])), frame):
+    #        print('WARNING - check for gacos/hgt not implemented in this function yet - TODO')
     # else: not ready now for gacos or hgt correlation
     #
     if not cascade:
