@@ -48,13 +48,13 @@ def load_licsbas_cumh5_as_xrda(cumfile):
     cumxr = xr.DataArray(cum.cum.values, coords=[time, lat, lon], dims=["time", "lat", "lon"])
     cumxr.attrs['unit'] = 'mm'
     refarea = str(cum.refarea.values)
-    # y is first...
-    refy1 = int(refarea.split('/')[0].split(':')[0])
-    refy2 = int(refarea.split('/')[0].split(':')[1])
-    refx1 = int(refarea.split('/')[1].split(':')[0])
-    refx2 = int(refarea.split('/')[1].split(':')[1])
-    refx=int(refx2+refx1/2)
-    refy = int(refy2 + refy1 / 2)
+    # x is first...
+    refx1 = int(refarea.split('/')[0].split(':')[0])
+    refx2 = int(refarea.split('/')[0].split(':')[1])
+    refy1 = int(refarea.split('/')[1].split(':')[0])
+    refy2 = int(refarea.split('/')[1].split(':')[1])
+    refx=int((refx2+refx1)/2)
+    refy = int((refy2 + refy1) / 2)
     cumxr.attrs['ref_lon'] = cumxr.lon.values[refx]
     cumxr.attrs['ref_lat'] = cumxr.lat.values[refy]
     return cumxr
@@ -62,28 +62,34 @@ def load_licsbas_cumh5_as_xrda(cumfile):
 
 def correct_cum_from_tifs(cumhdfile, tifdir = 'GEOC.EPOCHS', ext='geo.iono.code.tif', tif_scale2mm = 1):
     cumxr = load_licsbas_cumh5_as_xrda(cumhdfile)
-    cumxr = cumcube_remove_from_tifs(cumxr, tifdir, ext, tif_scale2mm)
+    cumxr = cumcube_remove_from_tifs(cumxr, tifdir, ext, tif_scale2mm, only_load_ext = True)
     cumh = xr.load_dataset(cumhdfile)
-    cumh.values = cumxr.values
+    newcumname = ext.split('.')[1]
+    cumh[newcumname]=cumh.cum.copy()
+    cumh[newcumname].values=cumxr.values
+    cumh.cum.values = cumh.cum.values - cumxr.values
     cumh.to_netcdf(cumhdfile)
 
 
 # def check_complete_set(imdates, epochsdir, ext='geo.iono.code.tif')
-def cumcube_remove_from_tifs(cumxr, tifdir = 'GEOC.EPOCHS', ext='geo.iono.code.tif', tif_scale2mm = 1):
-    ''' Correct directly from tifs, no need to store in cubes
+def cumcube_remove_from_tifs(cumxr, tifdir = 'GEOC.EPOCHS', ext='geo.iono.code.tif', tif_scale2mm = 1, only_load_ext = False):
+    ''' Correct directly from tifs, no need to store in cubes.
+    NOTE - you can also just load the exts into the cumcube without removing anything..
 
     Args:
         cumxr:
         tifdir:
         ext:
         tif_scale2mm:  for iono [rad]: (0.055465*1000)/(4*np.pi), for SET [m]: 1/1000
-
+        only_load_ext:  would only load the ext files in the cube and return it (no removal!)
+        
     Returns:
-        xr.DataArray (corrected cum values)
+        xr.DataArray: corrected cum values (only_load_ext=False) or only loaded corrections
     '''
     #if check_complete_set(cumxr.time.values)
     #times = cumxr.time.values
-    reflon, reflat = cumxr['reflon'], cumxr['reflat']
+    reflon, reflat = cumxr.attrs['ref_lon'], cumxr.attrs['ref_lat']
+    #
     for i in range(len(cumxr)): # times first coord..
         cumepoch = cumxr[i]
         epoch = str(cumepoch.time.values).split('T')[0].replace('-','')
@@ -96,7 +102,15 @@ def cumcube_remove_from_tifs(cumxr, tifdir = 'GEOC.EPOCHS', ext='geo.iono.code.t
         extepoch = extepoch * tif_scale2mm
         extepoch = extepoch.interp_like(cumepoch, method='linear') # CHECK!
         extepoch = extepoch - extepoch.sel(lon=reflon, lat=reflat, method='nearest') # could be done better though
-        cumxr[i].values = cumxr[i].values - extepoch
+        if only_load_ext:
+            cumxr.values[i] = extepoch.values
+        else:
+            print('sorry not developed yet')
+            return # need to think
+        #cumxr[i].values = cumxr[i].values - extepoch  # oh this one is so lame wrong..
+    if only_load_ext:
+        #cumxr = cumxr.cumsum(axis=0)
+        cumxr = cumxr.cumsum(axis=0)-cumxr[0]
     return cumxr
 
 
