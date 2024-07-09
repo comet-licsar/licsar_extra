@@ -60,7 +60,21 @@ def load_licsbas_cumh5_as_xrda(cumfile):
     return cumxr
 
 
-def correct_cum_from_tifs(cumhdfile, tifdir = 'GEOC.EPOCHS', ext='geo.iono.code.tif', tif_scale2mm = 1):
+def correct_cum_from_tifs(cumhdfile, tifdir = 'GEOC.EPOCHS', ext='geo.iono.code.tif', tif_scale2mm = 1, outputhdf = None):
+    '''
+
+    Args:
+        cumhdfile:
+        tifdir:
+        ext:
+        tif_scale2mm:
+        outputhdf:   if None, will overwrite the input file - note, it will work for both H5 and NC formats (maybe also zarr?)
+
+    Returns:
+
+    '''
+    if not outputhdf:
+        outputhdf = cumhdfile
     cumxr = load_licsbas_cumh5_as_xrda(cumhdfile)
     cumxr = cumcube_remove_from_tifs(cumxr, tifdir, ext, tif_scale2mm, only_load_ext = True)
     cumh = xr.load_dataset(cumhdfile)
@@ -68,7 +82,7 @@ def correct_cum_from_tifs(cumhdfile, tifdir = 'GEOC.EPOCHS', ext='geo.iono.code.
     cumh[newcumname]=cumh.cum.copy()
     cumh[newcumname].values=cumxr.values
     cumh.cum.values = cumh.cum.values - cumxr.values
-    cumh.to_netcdf(cumhdfile)
+    cumh.to_netcdf(outputhdf)
 
 
 # def check_complete_set(imdates, epochsdir, ext='geo.iono.code.tif')
