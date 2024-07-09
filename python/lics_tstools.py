@@ -80,7 +80,7 @@ def correct_cum_from_tifs(cumhdfile, tifdir = 'GEOC.EPOCHS', ext='geo.iono.code.
     cumxr = load_licsbas_cumh5_as_xrda(cumhdfile)
     print('loading external corrections')
     cumxr = cumcube_remove_from_tifs(cumxr, tifdir, ext, tif_scale2mm, only_load_ext = not directcorrect)
-    if type(cumxr) = type(False):
+    if type(cumxr) == type(False):
         print('ERROR - probably the correction did not exist for some epochs. Cancelling')
         return False
     cumh = xr.load_dataset(cumhdfile)
