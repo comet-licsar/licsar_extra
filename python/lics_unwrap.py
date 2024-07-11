@@ -207,7 +207,8 @@ def get_cliparea_xr(xrd):
 def mm2rad_s1(inmm, rad2mm=False):
     """Converts from mm to radians (for Sentinel-1)
     """
-    speed_of_light = 299792458 #m/s
+    #speed_of_light = 299792458 #m/s
+    speed_of_light = 299702547  #m/s ... in case of all-in-air 299792458 #m/s
     radar_freq = 5.405e9  #for S1
     wavelength = speed_of_light/radar_freq #meter
     coef_r2m = wavelength/4/np.pi*1000 #rad -> mm,
