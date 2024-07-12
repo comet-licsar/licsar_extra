@@ -3080,7 +3080,7 @@ def correct_hgt(ifg_mlc, blocklen = 20, tmpdir = os.getcwd(), dounw = True, num_
     return out, outype
 
 
-def export_xr2tif(xrda, tif, lonlat = True, debug = True, dogdal = True, refto = None):
+def export_xr2tif(xrda, tif, lonlat = True, debug = True, dogdal = True, refto = None, set_to_pixel_registration = False):
     """Exports xarray dataarray to a geotiff
     
      Args:
@@ -3090,6 +3090,7 @@ def export_xr2tif(xrda, tif, lonlat = True, debug = True, dogdal = True, refto =
         debug (boolean): just load it as float32
         dogdal (boolean): after exporting, perform gdalwarp (fix for potential issues in output geotiff) and gdal_translate to better compress
         refto (str): path to the (usually hgt) file to apply gdalwarp2match.py to. If None, it will not apply
+        set_to_pixel_registration (boolean):  will rewrite header to assume Pixel Registration - that's by default in LiCSAR data (but not in rasterio...)
     """
     import rioxarray
     #coordsys = xrda.crs.split('=')[1]
@@ -3111,12 +3112,15 @@ def export_xr2tif(xrda, tif, lonlat = True, debug = True, dogdal = True, refto =
         xrda = xrda.rio.set_spatial_dims(x_dim="x", y_dim="y", inplace=True)
     xrda = xrda.rio.write_crs(coordsys, inplace=True)
     if dogdal:
-        xrda.rio.to_raster(tif+'tmp.tif', compress='deflate')
+        xrda.rio.to_raster(tif+'tmp.tif')
         if refto:
             cmd = 'gdalwarp2match.py {0} {1} {2}; mv {2} {0}'.format(tif+'tmp.tif', refto, tif)
             runcmd(cmd, printcmd=False)
         else:
             cmd = 'gdalwarp -t_srs EPSG:4326 {0} {1}'.format(tif + 'tmp.tif', tif)  # will fix some issues
+            runcmd(cmd, printcmd=False)
+        if set_to_pixel_registration:
+            cmd = 'gdal_edit.py -mo AREA_OR_POINT=Point '+tif
             runcmd(cmd, printcmd=False)
         cmd = 'mv {0} {1}; gdal_translate -of GTiff -co COMPRESS=DEFLATE -co PREDICTOR=3 {1} {0}'.format(tif, tif+'tmp.tif') # will compress better
         runcmd(cmd, printcmd = False)
@@ -3126,6 +3130,9 @@ def export_xr2tif(xrda, tif, lonlat = True, debug = True, dogdal = True, refto =
             os.remove(tif + 'tmp2.tif')
     else:
         xrda.rio.to_raster(tif, compress='deflate')
+        if set_to_pixel_registration:
+            cmd = 'gdal_edit.py -mo AREA_OR_POINT=Point '+tif
+            runcmd(cmd, printcmd=False)
 
 
 
