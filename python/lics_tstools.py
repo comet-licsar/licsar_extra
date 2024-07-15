@@ -67,7 +67,7 @@ def correct_cum_from_tifs(cumhdfile, tifdir = 'GEOC.EPOCHS', ext='geo.iono.code.
         cumhdfile (str): input cum.h5 file
         tifdir (str): where to find corrections. Must be in epoch subdirs, e.g. tifdir/20240216/20240216.ext
         ext (str):    what extension is used for the correction files after the epochdate, e.g. 'geo.iono.code.tif', 'tide.geo.tif'
-        tif_scale2mm (float):  for iono [rad]: (0.055465*1000)/(4*np.pi), for SET [m]: 1/1000
+        tif_scale2mm (float):  for iono [rad]: 55.465/(4*np.pi), for SET [m]: 1000, for sltd [rad] same as iono but opposite sign (real delay)
         outputhdf (str):   if None, will overwrite the input file, otherwise will export to this filename (functional: H5, NC, possibly: zarr)
         directcorrect (bool): if True, it will directly reduce the cum data, otherwise it stores it to the datacube
     
@@ -88,10 +88,13 @@ def correct_cum_from_tifs(cumhdfile, tifdir = 'GEOC.EPOCHS', ext='geo.iono.code.
         cumh.cum.values = cumh.cum.values - cumxr.values
     else:
         newcumname = 'external_data'
-        codes = ['iono', 'tide']
+        codes = ['iono', 'tide', 'icams']
         for c in codes:
             if ext.find(c)>-1:
                 newcumname = c
+        if newcumname in cumh:
+            # rename to extension
+            newcumname = ext
         if newcumname in cumh:
             print('WARNING, the layer "'+newcumname+'"already existed in the datacube! Will overwrite it now')
         print('storing as variable: '+newcumname)
@@ -130,14 +133,15 @@ def cumcube_remove_from_tifs(cumxr, tifdir = 'GEOC.EPOCHS', ext='geo.iono.code.t
         epoch = str(cumepoch.time.values).split('T')[0].replace('-','')
         extif = os.path.join(tifdir, epoch, epoch+'.'+ext)
         if not os.path.exists(extif):
-            print('no correction available for epoch '+epoch)
-            print('interpolation not implemented - cancelling (although.. this can be easy)')
-            return False
-        extepoch = load_tif2xr(extif)
-        extepoch = extepoch.where(extepoch != 0) # just in case...
-        extepoch = extepoch * tif_scale2mm
-        extepoch = extepoch.interp_like(cumepoch, method='linear') # CHECK!
-        extepoch = extepoch - extepoch.sel(lon=reflon, lat=reflat, method='nearest') # could be done better though
+            print('\n\r WARNING: no correction available for epoch '+epoch+'. Filling with NaNs')
+            extepoch = cumepoch.copy() * np.nan
+            extepoch.attrs.clear()
+        else:
+            extepoch = load_tif2xr(extif)
+            extepoch = extepoch.where(extepoch != 0) # just in case...
+            extepoch = extepoch * tif_scale2mm
+            extepoch = extepoch.interp_like(cumepoch, method='linear') # CHECK!
+            extepoch = extepoch - extepoch.sel(lon=reflon, lat=reflat, method='nearest') # could be done better though
         if i == 0:
             firstepvals = extepoch.fillna(0).values
         # here we do diff w.r.t. first epoch
@@ -148,7 +152,7 @@ def cumcube_remove_from_tifs(cumxr, tifdir = 'GEOC.EPOCHS', ext='geo.iono.code.t
             cumxr.values[i] = extepoch.values
         else:
             cumxr.values[i] = cumxr.values[i] - extepoch.values
-    print('  done')
+    print('\n\r  done')
     #if only_load_ext:
     #    cumxr = cumxr-cumxr[0] #.cumsum(axis=0)
     #    cumxr = cumxr.cumsum(axis=0)-cumxr[0]
