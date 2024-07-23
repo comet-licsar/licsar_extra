@@ -3862,7 +3862,7 @@ def build_amp_avg_std(frame, return_ampstab = False, intensity=False):
     track=str(int(frame[:3]))
     epochsdir = os.path.join(os.environ['LiCSAR_public'], track, frame, 'epochs')
     hgtfile = os.path.join(os.environ['LiCSAR_public'], track, frame, 'metadata', frame+'.geo.hgt.tif')
-    hgtxr = xr.open_rasterio(os.path.join(hgtfile))
+    hgtxr = xr.open_rasterio(hgtfile)
     hgtxr = hgtxr.squeeze('band').drop('band')
     mlitiflist = fc.get_epochs(frame, return_mli_tifs = True)
     print('generating amp average')
