@@ -133,6 +133,8 @@ def cumcube_remove_from_tifs(cumxr, tifdir = 'GEOC.EPOCHS', ext='geo.iono.code.t
         epoch = str(cumepoch.time.values).split('T')[0].replace('-','')
         extif = os.path.join(tifdir, epoch, epoch+'.'+ext)
         if not os.path.exists(extif):
+            extif = os.path.join(tifdir, epoch + '.' + ext)
+        if not os.path.exists(extif):
             print('\n\r WARNING: no correction available for epoch '+epoch+'. Filling with NaNs')
             extepoch = cumepoch.copy() * np.nan
             extepoch.attrs.clear()
