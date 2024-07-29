@@ -1299,7 +1299,7 @@ def process_frame(frame = 'dummy', ml = 10, thres = 0.3,
                 ampavg, ampstd = build_amp_avg_std(frame)
                 ampstab = 1 - ampstd/ampavg
                 ampstab.values[ampstab<=0] = 0.00001
-                ampstab = 1 - ampstab  # need to calc here as for use_amp_coh we need the avgs..
+                #ampstab = 1 - ampstab  # need to calc here as for use_amp_coh we need the avgs..
                 if not os.path.exists(ampstabfile):
                     ampstab.to_netcdf(ampstabfile)
             extweights = ampstab
