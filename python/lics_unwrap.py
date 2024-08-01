@@ -458,7 +458,7 @@ for p in pairs:
 
 
 
-def process_ifg_pair(phatif, cohtif, procpairdir = os.getcwd(),
+def process_ifg_pair(phatif, cohtif, procpairdir = os.getcwd(), landmask_tif = None,
         ml = 10, fillby = 'gauss', thres = 0.2, cascade = False, 
         smooth = False, lowpass = True, goldstein = True, specmag = False, spatialmask_km = 2,
         defomax = 0.6, frame = '', hgtcorr = False, gacoscorr = True, pre_detrend = True,
@@ -506,7 +506,7 @@ def process_ifg_pair(phatif, cohtif, procpairdir = os.getcwd(),
         xarray.Dataset: unwrapped multilooked interferogram with additional layers
     """
     try:
-        ifg = load_from_tifs(phatif, cohtif, landmask_tif = None) #, cliparea_geo = cliparea_geo) # do not clip here, it will be done later!
+        ifg = load_from_tifs(phatif, cohtif, landmask_tif = landmask_tif) #, cliparea_geo = cliparea_geo) # do not clip here, it will be done later!
     except:
         print('error in loading data')
         return False
@@ -1262,6 +1262,7 @@ def process_frame(frame = 'dummy', ml = 10, thres = 0.3,
     framelen = raster.RasterYSize
     
     if dolocal and do_landmask:
+        # this is to generate the landmask tif file in the local directory...
         landmask_file = os.path.join(geoifgdir,frame+'.geo.landmask.tif')
         if not os.path.exists(landmask_file):
             print('preparing land mask clip')
@@ -1273,7 +1274,11 @@ def process_frame(frame = 'dummy', ml = 10, thres = 0.3,
                 hgt = load_tif2xr(hgtfile)
                 landmask = landmask_frame.interp_like(hgt,method='nearest')
                 export_xr2tif(landmask, landmask_file, dogdal=False)
-    
+        # setting the landmask tif for the process_ifg_pair function
+        if os.path.exists(landmask_file):
+            landmask_tif = landmask_file
+        else:
+            landmask_tif = None
     #if cliparea_geo:
     #    import rioxarray as rio
     #    hgt = xr.open_dataarray(hgtfile)
@@ -1463,7 +1468,7 @@ def process_frame(frame = 'dummy', ml = 10, thres = 0.3,
                         print('debug - local here')
                         ifg_ml = process_ifg_pair(phatif, cohtif, procpairdir = os.path.join(procdir,pair), ml = ml, hgtcorr = hgtcorr, fillby = fillby,
                                                  thres = thres, defomax = defomax, add_resid = True, outtif = outtif, extweights = extweights, smooth = smooth,
-                                                 lowpass=lowpass, goldstein=goldstein, specmag = specmag, pre_detrend = pre_detrend,
+                                                 lowpass=lowpass, goldstein=goldstein, specmag = specmag, pre_detrend = pre_detrend, landmask_tif = landmask_tif,
                                                  keep_coh_debug = keep_coh_debug, gacoscorr = gacoscorr, cliparea_geo = cliparea_geo,
                                                  subtract_gacos = subtract_gacos, cascade = cascade, use_gamma = use_gamma)
                     (ifg_ml.unw.where(ifg_ml.mask_full > 0).values).astype(np.float32).tofile(pair+'/'+pair+'.unw')
@@ -3872,7 +3877,7 @@ def build_amp_avg_std(frame, return_ampstab = False, intensity=False):
     if return_ampstab:
         ampstab = 1 - ampstd/ampavg
         ampstab.values[ampstab<=0] = 0.00001
-        ampstab = 1 - ampstab
+        #ampstab = 1 - ampstab
         return ampstab
     else:
         return ampavg, ampstd
