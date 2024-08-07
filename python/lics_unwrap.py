@@ -1913,7 +1913,7 @@ def load_from_tifs(phatif, cohtif, landmask_tif = None, cliparea_geo = None):
     inmask.values = np.byte(incoh > 0)
     if landmask_tif:
         if os.path.exists(landmask_tif):
-            landmask = load_tif2xr(landmask_file)
+            landmask = load_tif2xr(landmask_tif)
             inmask.values = landmask.values * inmask.values
     ifg = xr.Dataset()
     ifg['pha'] = inpha
