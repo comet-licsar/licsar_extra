@@ -1138,7 +1138,10 @@ def process_ifg_core(ifg, tmpdir = os.getcwd(),
         #ifg_ml['unw'].to_netcdf(outtif+'.nc')
         #rc = os.system('gmt grdconvert -G{0}=gd:GTiff -R{1} {0}.nc'.format(outtif, ifg_pha_file))
         #rc = os.system('source {0}/lib/LiCSAR_bash_lib.sh; create_preview_unwrapped {1} {2}'.format(os.environ['LiCSARpath'], outtif, frame))
-        rc = os.system('source {0}/lib/LiCSAR_bash_lib.sh; create_preview_unwrapped {1}'.format(os.environ['LiCSARpath'], outtif))
+        try:
+            rc = os.system('source {0}/lib/LiCSAR_bash_lib.sh; create_preview_unwrapped {1}'.format(os.environ['LiCSARpath'], outtif))
+        except:
+            print('unw.png preview not generated')
         #try:
         #    os.remove(outtif+'.nc')
         #except:
@@ -1487,7 +1490,7 @@ def process_frame(frame = 'dummy', ml = 10, thres = 0.3,
                         plot_lib.make_im_png(np.angle(np.exp(1j * ifg_ml.unw.values / cycle) * cycle), unwpngfile, cmap_wrap,
                                              pair + '.unw', vmin=-np.pi, vmax=np.pi, cbar=False)
                     except:
-                        print('error with new preview, doing old way')
+                        print('error with LiCSBAS preview, doing old way (cpxfiddle needed)')
                         create_preview_bin(pair+'/'+pair+'.unw', width, ftype = 'unw')
                     #os.system('rm '+pair+'/'+pair+'.unw.ras')
                     os.system('rm -r '+pair+'/'+'temp_'+str(ml)+' 2>/dev/null')
@@ -4176,7 +4179,10 @@ def deramp_ifg_tif(phatif, unwrap_after = True):
        phatif.replace('.geo.'+ext+'.tif','.geo.diff.orig.png')))
     export_xr2tif(xrpha_detrended, phatif)
     # just do also preview
-    create_preview(phatif, 'wrapped')
+    try:
+        create_preview(phatif, 'wrapped')
+    except:
+        print('preview not generated')
     if unwrap_after:
         # and probably reunwrapping is needed...
         # doing it original way
