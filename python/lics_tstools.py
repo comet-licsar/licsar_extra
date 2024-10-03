@@ -197,3 +197,115 @@ def calculate_defo_period(xrds, t1, t2, defolabel, medwin = 5, inside_period = T
     return xrds
 
 
+'''from lixcor:
+import xarray as xr
+import netCDF4
+def _expand_variable(nc_variable, data, expanding_dim, nc_shape, added_size):
+    # For time deltas, we must ensure that we use the same encoding as
+    # what was previously stored.
+    # We likely need to do this as well for variables that had custom
+    # econdings too
+    if hasattr(nc_variable, 'calendar'):
+        data.encoding = {
+            'units': nc_variable.units,
+            'calendar': nc_variable.calendar,
+        }
+    data_encoded = xr.conventions.encode_cf_variable(data) # , name=name)
+    left_slices = data.dims.index(expanding_dim)
+    right_slices = data.ndim - left_slices - 1
+    nc_slice   = (slice(None),) * left_slices + (slice(nc_shape, nc_shape + added_size),) + (slice(None),) * (right_slices)
+    nc_variable[nc_slice] = data_encoded.data
+
+
+def append_to_netcdf(filename, ds_to_append, unlimited_dims):
+    if isinstance(unlimited_dims, str):
+        unlimited_dims = [unlimited_dims]
+    if len(unlimited_dims) != 1:
+        # TODO: change this so it can support multiple expanding dims
+        raise ValueError(
+            "We only support one unlimited dim for now, "
+            f"got {len(unlimited_dims)}.")
+    unlimited_dims = list(set(unlimited_dims))
+    expanding_dim = unlimited_dims[0]
+    with netCDF4.Dataset(filename, mode='a') as nc:
+        nc_dims = set(nc.dimensions.keys())
+        nc_coord = nc[expanding_dim]
+        nc_shape = len(nc_coord)
+        added_size = len(ds_to_append[expanding_dim])
+        variables, attrs = xr.conventions.encode_dataset_coordinates(ds_to_append)
+        for name, data in variables.items():
+            if expanding_dim not in data.dims:
+                # Nothing to do, data assumed to the identical
+                continue
+            nc_variable = nc[name]
+            _expand_variable(nc_variable, data, expanding_dim, nc_shape, added_size)
+
+
+
+def import_tifs(path, varname = 'soil_moisture', cliparea_geo = '', thirddim = 'time', outnc = 'out.nc'):
+    firstpass = True
+    if cliparea_geo:
+        minclipx, maxclipx, minclipy, maxclipy = cliparea_geo.split('/')
+        minclipx, maxclipx, minclipy, maxclipy = float(minclipx), float(maxclipx), float(minclipy), float(maxclipy)
+    for tif in os.listdir(path):
+        if not 'tif' in tif:
+            continue
+        if thirddim == 'time':
+            third = pd.Timestamp(tif.split('.')[0])
+        else:
+            third = tif.split('.')[0]
+        data = xr.open_rasterio(os.path.join(path,tif))
+        data = data.rename({'x': 'lon','y': 'lat','band': thirddim})
+        data[thirddim] = [third]
+        print('importing {}'.format(third))
+        data = data.sortby([thirddim,'lon','lat'])
+        coordsys = data.crs.split('=')[1]
+        if cliparea_geo:
+            data = data.sel(lon=slice(minclipx, maxclipx), lat=slice(minclipy, maxclipy))
+        ds = xr.Dataset({varname:data})
+        if firstpass:
+            #ds = xr.Dataset({varname:data})
+            #if cliparea_geo:
+            #    #in case the coords do not fit
+            #    coordsys = data.crs.split('=')[1]
+            #    #from pyproj import Transformer
+            #    #transformer = Transformer.from_crs("epsg:4326", coordsys)
+            #    #(minclipx, minclipy) = transformer.transform(minclipy, minclipx)
+            #    #(maxclipx, maxclipy) = transformer.transform(maxclipy, maxclipx)
+            #    data = data.sel(lon=slice(minclipx, maxclipx), lat=slice(minclipy, maxclipy))
+            #da = data
+            ds.rio.set_spatial_dims(x_dim="lon", y_dim="lat", inplace=True)
+            ds.rio.write_crs(coordsys, inplace=True)
+            ds.to_netcdf(outnc, mode='w', unlimited_dims=[thirddim])
+            #if not coordsys == "epsg:4326":
+            #    ds = ds.rio.reproject("+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs")
+            #    ds = ds.rename({'x': 'lon','y': 'lat'})
+            #    ds.rio.set_spatial_dims(x_dim="lon", y_dim="lat", inplace=True)
+            #    ds.rio.write_crs("epsg:4326", inplace=True)
+            firstpass = False
+        else:
+            append_to_netcdf(outnc, ds, unlimited_dims=thirddim)
+            #da = xr.concat([da, data], dim='time')
+    #ds = xr.Dataset({varname:da})
+    #ds = ds.sortby([thirddim,'lon','lat'])
+    #ds.rio.set_spatial_dims(x_dim="lon", y_dim="lat", inplace=True)
+    #ds.rio.write_crs(coordsys, inplace=True)
+    #if not coordsys == "epsg:4326":
+    #    ds = ds.rio.reproject("+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs")
+    #    ds = ds.rename({'x': 'lon','y': 'lat'})
+    #    ds.rio.set_spatial_dims(x_dim="lon", y_dim="lat", inplace=True)
+    #    ds.rio.write_crs("epsg:4326", inplace=True)
+    #ds = ds.transpose(thirddim,"lat","lon")
+    #ds = ds.sortby([thirddim,'lon','lat'])
+    ds = xr.open_dataset(outnc)
+    return ds
+
+
+def get_date_matrix(pairs):
+    date_matrix = pd.DataFrame(pairs, columns=['pair'])
+    date_matrix['date1'] = pd.to_datetime(date_matrix.pair.str[:8], format='%Y%m%d')
+    date_matrix['date2'] = pd.to_datetime(date_matrix.pair.str[9:], format='%Y%m%d')
+    date_matrix['btemp'] = date_matrix.date2 - date_matrix.date1
+    date_matrix = date_matrix.set_index('pair')
+    return date_matrix
+'''

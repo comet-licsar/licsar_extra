@@ -15,12 +15,15 @@
 ################################################################################
 
 
+import collections
+
+inps = dict()
 inps['plate_name'] = 'Eurasia'
 
 plate = ITRF2014_PMM[inps.plate_name]
-inps.omega_cart = [plate.omega_x, plate.omega_y, plate.omega_z]
+#inps.omega_cart = [plate.omega_x, plate.omega_y, plate.omega_z]
 msg = f'get rotation parameters for {inps.plate_name} plate from Table 1 in Altamimi et al. (2017): '
-msg += f'wx, wy, wz = {plate.omega_x}, {plate.omega_y}, {plate.omega_z} mas/yr'
+#msg += f'wx, wy, wz = {plate.omega_x}, {plate.omega_y}, {plate.omega_z} mas/yr'
 print(msg)
 
 
@@ -471,17 +474,6 @@ def calc_plate_motion(geom_file, omega_cart=None, omega_sph=None, const_vel_enu=
         raise ValueError('No plate motion configuration (--om-cart/sph or --enu) found!')
     # radar-code the plate motion if input geometry is in radar coordinates
     atr = readfile.read_attribute(geom_file)
-    if 'Y_FIRST' not in atr.keys():
-        print('radar-coding the rigid plate motion in ENU ...')
-        res_obj = resample(lut_file=geom_file)
-        res_obj.open()
-        res_obj.src_meta = atr_geo
-        res_obj.prepare()
-        # resample data
-        box = res_obj.src_box_list[0]
-        ve = res_obj.run_resample(src_data=ve[box[1]:box[3], box[0]:box[2]])
-        vn = res_obj.run_resample(src_data=vn[box[1]:box[3], box[0]:box[2]])
-        vu = res_obj.run_resample(src_data=vu[box[1]:box[3], box[0]:box[2]])
     ## project Plate motion from ENU to direction of interest, e.g. LOS or az
     c0, c1 = pmm_comp.split('2')
     print(f'project the ridig plate motion from {c0.upper()} onto {c1.upper()} direction')
