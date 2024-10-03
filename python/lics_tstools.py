@@ -195,3 +195,5 @@ def calculate_defo_period(xrds, t1, t2, defolabel, medwin = 5, inside_period = T
         xrds = xrds.drop_dims('defolabel')
         xrds['defo'] = mergeda
     return xrds
+
+

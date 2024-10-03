@@ -3759,9 +3759,9 @@ def wrap2phase(A):
     return np.angle(np.exp(1j*A))
 
 
-def make_avg_amp(mlitiflist, hgtxr, intensity=False):
+def make_avg_amp(mlitiflist, hgtxr, input_is_intensity=True):
     """Generates average amplitude from list of MLI tiffs
-    if intensity==True, use squared amplitude
+    if input_is_intensity==True, we first convert to amplitude using sqrt
     """
     avgamp = hgtxr*0
     nopixels = avgamp.copy()
@@ -3773,14 +3773,14 @@ def make_avg_amp(mlitiflist, hgtxr, intensity=False):
             continue
         amp[np.isnan(amp)] = 0
         nopixels.values[amp>0] += 1
-        if intensity:
-            amp=amp**2
+        if input_is_intensity:
+            amp=np.sqrt(amp)
         avgamp = avgamp + amp
     avgamp = avgamp/nopixels
     return avgamp
 
 
-def make_std_amp(mlitiflist, avgamp, intensity=False):
+def make_std_amp(mlitiflist, avgamp, input_is_intensity=True):
     """Generates standard deviation of amplitude from list of MLI tiffs
     """
     ddof = 1
@@ -3794,8 +3794,8 @@ def make_std_amp(mlitiflist, avgamp, intensity=False):
             continue
         amp[np.isnan(amp)] = 0
         nopixels.values[amp>0] += 1
-        if intensity:
-            amp=amp**2
+        if input_is_intensity:
+            amp=np.sqrt(amp)
         avgvar = avgvar + (amp - avgamp)**2
     # correct for ddof
     sumpx = nopixels - ddof
@@ -3855,28 +3855,28 @@ def get_date_matrix(pairs):
     return date_matrix
 
 
-def build_amp_avg_std(frame, return_ampstab = False, intensity=False):
+def build_amp_avg_std(frame, return_ampstab = False):    #, input_is_intensity=True):
     """Builds amplitude stability map (or just avg/std amplitude) of a frame
     Args:
         frame (str)
-        return_ampstab (bool): if True, returns amplitude[/int] stability, otherwise avg amp and std amp
-        intensity (bool): if True, will work with intensity (amp squared)
+        return_ampstab (bool): if True, returns amplitude stability, otherwise avg amp and std amp
     """
+    # input_is_intensity(bool): if True, will first convert the input work with intensity (amp squared)
     try:
         import framecare as fc
     except:
         print('framecare not loaded - amplitude stability will not work')
         return False
     track=str(int(frame[:3]))
-    epochsdir = os.path.join(os.environ['LiCSAR_public'], track, frame, 'epochs')
+    #epochsdir = os.path.join(os.environ['LiCSAR_public'], track, frame, 'epochs')
     hgtfile = os.path.join(os.environ['LiCSAR_public'], track, frame, 'metadata', frame+'.geo.hgt.tif')
     hgtxr = xr.open_rasterio(hgtfile)
     hgtxr = hgtxr.squeeze('band').drop('band')
     mlitiflist = fc.get_epochs(frame, return_mli_tifs = True)
     print('generating amp average')
-    ampavg = make_avg_amp(mlitiflist, hgtxr, intensity=intensity)
+    ampavg = make_avg_amp(mlitiflist, hgtxr, input_is_intensity=input_is_intensity)
     print('generating amp std')
-    ampstd = make_std_amp(mlitiflist, ampavg, intensity=intensity)
+    ampstd = make_std_amp(mlitiflist, ampavg, input_is_intensity=input_is_intensity)
     if return_ampstab:
         ampstab = 1 - ampstd/ampavg
         ampstab.values[ampstab<=0] = 0.00001
