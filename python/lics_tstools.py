@@ -277,6 +277,7 @@ def generate_pmm_velocity(frame, plate = 'Eurasia', geocdir = None, outif = None
     # 2.
     print('Calculating the plate motion velocity in LOS (please check the sign here)')
     vlos_plate = ve*E + vn*N + vu*U
+    vlos_plate = 1000*vlos_plate # to mm/year
     if outif:
         export_xr2tif(vlos_plate, outif, dogdal = False)
     return vlos_plate
