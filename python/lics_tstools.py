@@ -230,7 +230,7 @@ def generate_pmm_velocity(frame, plate = 'Eurasia', geocdir = None, outif = None
 
     # getting plate data
     plate = pmm.ITRF2014_PMM[plate]
-    pole_obj = EulerPole(
+    pole_obj = pmm.EulerPole(
         wx=plate.omega_x,
         wy=plate.omega_y,
         wz=plate.omega_z,
