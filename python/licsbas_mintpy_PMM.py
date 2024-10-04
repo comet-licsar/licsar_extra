@@ -16,29 +16,7 @@
 
 
 import collections
-
-inps = dict()
-inps['plate_name'] = 'Eurasia'
-
-plate = ITRF2014_PMM[inps.plate_name]
-#inps.omega_cart = [plate.omega_x, plate.omega_y, plate.omega_z]
-msg = f'get rotation parameters for {inps.plate_name} plate from Table 1 in Altamimi et al. (2017): '
-#msg += f'wx, wy, wz = {plate.omega_x}, {plate.omega_y}, {plate.omega_z} mas/yr'
-print(msg)
-
-
-# calculate plate motion
-calc_plate_motion(
-    geom_file=inps.geom_file,
-    omega_cart=inps.omega_cart,
-    omega_sph=inps.omega_sph,
-    const_vel_enu=inps.const_vel_enu,
-    pmm_enu_file=inps.pmm_enu_file,
-    pmm_file=inps.pmm_file,
-    pmm_comp=inps.pmm_comp,
-    pmm_step=inps.pmm_step,
-)
-
+import numpy as np
 
 # global variables
 MAS2RAD = np.pi / 3600000 / 180    # 1 mas (milli arc second) = x radian
@@ -70,7 +48,30 @@ PMM_UNIT = {
 }
 
 
+'''
+inps = dict()
+inps['plate_name'] = 'Eurasia'
 
+plate = ITRF2014_PMM[inps.plate_name]
+#inps.omega_cart = [plate.omega_x, plate.omega_y, plate.omega_z]
+msg = f'get rotation parameters for {inps.plate_name} plate from Table 1 in Altamimi et al. (2017): '
+#msg += f'wx, wy, wz = {plate.omega_x}, {plate.omega_y}, {plate.omega_z} mas/yr'
+print(msg)
+
+
+# calculate plate motion
+calc_plate_motion(
+    geom_file=inps.geom_file,
+    omega_cart=inps.omega_cart,
+    omega_sph=inps.omega_sph,
+    const_vel_enu=inps.const_vel_enu,
+    pmm_enu_file=inps.pmm_enu_file,
+    pmm_file=inps.pmm_file,
+    pmm_comp=inps.pmm_comp,
+    pmm_step=inps.pmm_step,
+)
+
+'''
 
 ####################################  EulerPole class begin  #############################################
 # Define the Euler pole class
