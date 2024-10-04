@@ -17,6 +17,7 @@
 
 import collections
 import numpy as np
+import pyproj
 
 # global variables
 MAS2RAD = np.pi / 3600000 / 180    # 1 mas (milli arc second) = x radian
