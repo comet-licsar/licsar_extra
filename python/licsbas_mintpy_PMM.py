@@ -2,7 +2,7 @@
 
 ################################################################################
 # (GREAT!) codes from Mintpy to produce plate motion velocity map in given LOS (-> LiCSBAS)
-# by Milan Lazecky, 2024, University of Leeds
+# adapted towards LiCSAR/LiCSBAS by Milan Lazecky, 2024, University of Leeds
 #
 # Mintpy usage:
 #   from mintpy import plate_motion as pmm
