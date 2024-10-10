@@ -9,7 +9,7 @@
 ################################################################################
 
 from lics_unwrap import *
-import re
+import re, os, glob
 #import datetime as dt
 #t1 = dt.datetime(2016, 7, 1)
 #t2 = dt.datetime(2017, 7, 31)
@@ -195,6 +195,93 @@ def calculate_defo_period(xrds, t1, t2, defolabel, medwin = 5, inside_period = T
         xrds = xrds.drop_dims('defolabel')
         xrds['defo'] = mergeda
     return xrds
+
+
+def load_metatif(keystr='U', geocdir='GEOC', frame=None):
+    '''set either geocdir or frame ID (if to use LiCSAR data) to load one of: U, E, N, hgt, landmask (as keystr)'''
+    M = None
+    if geocdir:
+        M = glob.glob(geocdir + '/*.geo.' + keystr + '.tif')
+    if M:
+        M = M[0]
+    elif frame:
+        metadir = os.path.join(os.environ['LiCSAR_public'], str(int(frame[:3])), frame, 'metadata')
+        M = os.path.join(metadir, frame + '.geo.' + keystr + '.tif')
+        if not os.path.exists(M):
+            M = None
+    if M:
+        M = load_tif2xr(M)
+        M = M.where(M != 0)
+        return M
+    else:
+        print('ERROR: no ' + keystr + ' layer exists')
+        return False
+
+
+def generate_pmm_velocity(frame, plate = 'Eurasia', geocdir = None, outif = None):
+    '''This will generate LOS velocity for selected tectonic plate, such as for absolute referencing towards Eurasia..
+    uses MintPy functionality that implements velocity calculation using Euler poles rather than plate motion model with plates defined as polygons.
+
+    For all codes, see licsbas_mintpy_PMM
+    If geocdir is None, it will search directly on LiCSAR system (if you run this on JASMIN..)
+    '''
+    import licsbas_mintpy_PMM as pmm
+    sampling = 20000  # m --- note, this is only primary sampling, we will then interpolate to fit the frame data
+
+    # getting plate data
+    plate = pmm.ITRF2014_PMM[plate]
+    pole_obj = pmm.EulerPole(
+        wx=plate.omega_x,
+        wy=plate.omega_y,
+        wz=plate.omega_z,
+        unit='mas/yr',
+    )
+    # pole_obj.print_info()
+
+    # getting the frame data
+    E = load_metatif('E', geocdir, frame)
+    N = load_metatif('N', geocdir, frame)
+    U = load_metatif('U', geocdir, frame)
+
+    # coarsening unit vector U as template for the plate velocity
+    resolution = get_resolution(U, in_m=True)  # just mean avg in both lon, lat should be ok
+    # how large area is covered
+    lonextent = len(U.lon) * resolution
+    # so what is the multilook factor?
+    mlfactorlon = round(len(U.lon) / (lonextent / sampling))
+    latextent = len(U.lat) * resolution
+    mlfactorlat = round(len(U.lat) / (latextent / sampling))
+    Uml = U.coarsen({'lat': mlfactorlat, 'lon': mlfactorlon}, boundary='trim').mean()
+
+    lats = []
+    lons = []
+    for i in range(len(Uml.lat.values)):
+        for j in range(len(Uml.lon.values)):
+            lats.append(Uml.lat.values[i])
+            lons.append(Uml.lon.values[j])
+    lats = np.array(lats)
+    lons = np.array(lons)
+
+    # finally getting the plate velocities from the Euler pole definition over the frame area
+    ve, vn, vu = pole_obj.get_velocity_enu(lats, lons, alt=0.0, ellps=True)
+
+    # 1. interpolate the plate vel enus (i know, 3x more work here but still .. reasonable due to nans in ENU etc.)
+    print('Interpolating the plate velocity ENU vectors to the original frame resolution')
+    Uml.values = ve.reshape(Uml.shape)
+    ve = Uml.interp_like(U, method='linear', kwargs={"fill_value": "extrapolate"})
+    Uml.values = vn.reshape(Uml.shape)
+    vn = Uml.interp_like(U, method='linear', kwargs={"fill_value": "extrapolate"})
+    Uml.values = vu.reshape(Uml.shape)
+    vu = Uml.interp_like(U, method='linear', kwargs={"fill_value": "extrapolate"})
+
+    # 2.
+    print('Calculating the plate motion velocity in LOS (please check the sign here)')
+    vlos_plate = ve*E + vn*N + vu*U
+    vlos_plate = 1000*vlos_plate # to mm/year
+    if outif:
+        export_xr2tif(vlos_plate, outif, dogdal = False)
+    return vlos_plate
+
 
 
 '''from lixcor:
