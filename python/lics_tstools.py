@@ -239,9 +239,38 @@ def append_to_netcdf(filename, ds_to_append, unlimited_dims):
                 continue
             nc_variable = nc[name]
             _expand_variable(nc_variable, data, expanding_dim, nc_shape, added_size)
+'''
+
+"""
+def import_tifs2cube(tifspath, ncfile, searchstring='/*/*geo.mli.tif', varname = 'amplitude', thirddim = 'time', apply_func = None):
+    '''e.g. for amplitude from mlis, use apply_func = np.sqrt
+    Note the unlimited_dims should be already set to thirddim !'''
+    import glob
+    import pandas as pd
+
+    cube = xr.open_dataset(ncfile)
+    tifs=glob.glob(tifspath+searchstring)
+    for tif in tifs:
+        fname = os.path.basename(tif)
+        epoch=fname.split('.')[0]
+        if '_' in epoch:  # in case of ifgs, we set this to the later date
+            epoch = epoch.split('_')[-1]
+        epochdt = pd.Timestamp(epoch)
+        try:
+            data = rioxarray.open_rasterio(tif)
+        except:
+            print('ERROR loading tif for epoch '+epoch)
+            continue
+        data = data.rename({'x': 'lon','y': 'lat','band': thirddim})
+        data[thirddim] = [epochdt]
+        da = xr.DataArray(data=ds['amplitude'].values, dims=cube.dims)
 
 
 
+    append_to_netcdf(ncfile, ds, unlimited_dims=thirddim)
+"""
+
+'''
 def import_tifs(path, varname = 'soil_moisture', cliparea_geo = '', thirddim = 'time', outnc = 'out.nc'):
     firstpass = True
     if cliparea_geo:
