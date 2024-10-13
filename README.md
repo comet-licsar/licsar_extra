@@ -14,7 +14,7 @@ help(lics_unwrap.process_ifg_pair)
 ```
 
 ## lics_unwrap.py
-Currently, this is the only 'licsar_extra' library, improving the phase unwrapping, as was (partly) described in [IGARSS 2022](https://ieeexplore.ieee.org/document/9884337).
+Currently, this is the only 'licsar_extra' library, improving the phase unwrapping, as was (partly) described in [IGARSS 2022](https://ieeexplore.ieee.org/document/9884337) and [SARWatch 2023](https://www.sciencedirect.com/science/article/pii/S187705092401679X).
 As additional prerequisite, you should install [SNAPHU](http://web.stanford.edu/group/radar/softwareandlinks/sw/snaphu/).
 
 Then, having at least geotiffs of the wrapped interferogram and coherence, you can unwrap e.g. using:
