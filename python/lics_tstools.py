@@ -27,6 +27,61 @@ def grep1line(arg,filename):
     return res
 
 
+
+def licsbas_tsdir_remove_gacos(tsgacosdir):
+    ''' This will remove gacos correction from the time series and store as new TSXGEOC folder'''
+    tsgacosdir = os.path.realpath(tsgacosdir)
+    tsg = tsgacosdir.split('/')[-1]
+    tsdir = tsg.replace('GACOS','')
+    tsdir = os.path.join(os.path.dirname(tsgacosdir), tsdir)
+    if os.path.exists(tsdir):
+        print('ERROR, dir already exists')
+        return False
+    os.mkdir(tsdir)
+    #os.mkdir(tsdir+'/results')
+    rc = os.system('cp -r '+os.path.join(tsgacosdir, 'results')+' '+tsdir+'/.')
+    rc = os.system('cp -r ' + os.path.join(tsgacosdir, 'info') + ' ' + tsdir + '/.')
+    if not rc == 0:
+        print('error copying mask')
+        return False
+    cumgacosfile = os.path.join(tsgacosdir, 'cum.h5')
+    cumfile = os.path.join(tsdir, 'cum.h5')
+    rc = os.system('LiCSBAS_out2nc.py -i {0}/cum.h5 -o {1}/todel.nc --alignsar'.format(tsgacosdir, os.path.dirname(tsgacosdir)))
+    cumgacos = xr.open_dataset(cumgacosfile)
+    alignsar = xr.open_dataset(os.path.join(os.path.dirname(tsgacosdir), 'todel.nc'))
+    newcum=cumgacos.cum.values.copy()
+    for i in range(newcum.shape[0]):
+        newcum[i,:,:] = newcum[i,:,:]-np.flipud(alignsar.atmosphere_external.values[i])
+    cumgacos.cum.values = newcum
+    #velfile = os.path.join(tsgacosdir, 'results', 'vel')
+    #vel=np.fromfile(velfile, dtype=np.float32)
+    #vel=vel.reshape(cumgacos.vel.shape)
+    cumgacos.to_netcdf(cumfile)
+    rc = os.system('LiCSBAS16_filt_ts.py -t '+tsdir+' --n_para 4')
+
+
+def apply_func_in_volclipdir(volclip, predir = '/work/scratch-pw2/licsar/earmla/batchdir/subsets',
+                             func = licsbas_tsdir_remove_gacos):
+    vdir=os.path.join(predir,str(volclip))
+    import glob
+    for frdir in glob.glob(vdir+'/???[A,D]'):
+        for tsgacosdir in glob.glob(frdir+'/TS*GACOS'):
+            tsdir = tsgacosdir[:-5]
+            if not os.path.exists(tsdir):
+                if os.path.exists(os.path.join(tsgacosdir, 'cum_filt.h5')):
+                    try:
+                        func(tsgacosdir)
+                    except:
+                        print('Some error processing in:')
+                        print(tsgacosdir)
+                else:
+                    print('This is not processed yet:')
+                    print(tsgacosdir)
+            else:
+                print('TSDIR already exists, stopping for this directory:')
+                print(tsgacosdir)
+
+
 def load_licsbas_cumh5_as_xrda(cumfile):
     ''' Loads cum.h5 (now only cum layer) as standard xr.DataArray (in lon/lat)'''
     cum = xr.load_dataset(cumfile)
