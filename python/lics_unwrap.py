@@ -710,7 +710,11 @@ def process_ifg_core(ifg, tmpdir = os.getcwd(),
         if not use_gamma:
             print('filtering by custom-written goldstein filter (needs optimizing)')
             ifg_ml['filtpha'], sp = goldstein_filter_xr(ifg_ml.pha, blocklen=16, alpha=0.8, nproc=1, returncoh=(not specmag))
-        ifg_ml['gold_coh']=sp
+        if ml == 1:
+            print('with ML1, we need to use original coherence for masking')
+            ifg_ml['gold_coh'] = ifg_ml['coh']
+        else:
+            ifg_ml['gold_coh']=sp
         sp=sp.values
         sp[sp > 1] = 1  # should not happen, but just in case...
         sp[sp < 0] = 0
@@ -1305,8 +1309,10 @@ def process_frame(frame = 'dummy', ml = 10, thres = 0.3,
                 ampstab = xr.open_dataarray(ampstabfile)
             else:
                 ampavg, ampstd = build_amp_avg_std(frame)
-                ampstab = 1 - (ampstd**2)/ampavg  #should be variance
-                ampstab.values[ampstab<=0] = 0.00001
+                # using as weights directly = high values have higher weights (hi values must be more stable)
+                #ampstab = 1 - ampstd/ampavg
+                ampstab = ampavg / (ampstd**2)
+                ampstab.values[ampstab<=0] = 0.00001 # probably never happens..
                 #ampstab = 1 - ampstab  # need to calc here as for use_amp_coh we need the avgs..
                 if not os.path.exists(ampstabfile):
                     ampstab.to_netcdf(ampstabfile)
@@ -3878,7 +3884,8 @@ def build_amp_avg_std(frame, return_ampstab = False):    #, input_is_intensity=T
     print('generating amp std')
     ampstd = make_std_amp(mlitiflist, ampavg, input_is_intensity=input_is_intensity)
     if return_ampstab:
-        ampstab = 1 - ampstd/ampavg
+        #ampstab = 1 - ampstd/ampavg
+        ampstab = ampavg / (ampstd ** 2)
         ampstab.values[ampstab<=0] = 0.00001
         #ampstab = 1 - ampstab
         return ampstab
