@@ -41,6 +41,7 @@ def licsbas_tsdir_remove_gacos(tsgacosdir):
     #os.mkdir(tsdir+'/results')
     rc = os.system('cp -r '+os.path.join(tsgacosdir, 'results')+' '+tsdir+'/.')
     rc = os.system('cp -r ' + os.path.join(tsgacosdir, 'info') + ' ' + tsdir + '/.')
+    rc = os.system('cp -r ' + os.path.join(tsgacosdir, 'network') + ' ' + tsdir + '/.')
     if not rc == 0:
         print('error copying mask')
         return False
