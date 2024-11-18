@@ -61,6 +61,17 @@ def licsbas_tsdir_remove_gacos(tsgacosdir):
     rc = os.system('LiCSBAS16_filt_ts.py -t '+tsdir+' --n_para 4')
 
 
+''' e.g.
+import pandas as pd
+vidsfile='chilevolcsokvids.txt'
+vids=pd.read_csv(vidsfile, header=None)
+
+for vid in vids[0].values:
+    print(vid)
+    apply_func_in_volclipdir(vid)
+
+
+'''
 def apply_func_in_volclipdir(volclip, predir = '/work/scratch-pw2/licsar/earmla/batchdir/subsets',
                              func = licsbas_tsdir_remove_gacos):
     vdir=os.path.join(predir,str(volclip))

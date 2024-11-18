@@ -1392,19 +1392,20 @@ def process_frame(frame = 'dummy', ml = 10, thres = 0.3,
         else:
             pairsetok = []
             print('checking existing GACOS data')
-            for pair in pairset:
-                epoch1 = pair.split('_')[0]
-                epoch2 = pair.split('_')[1]
-                if os.path.exists(os.path.join(gacosdir,epoch1+'.sltd.geo.tif')) and os.path.exists(os.path.join(gacosdir,epoch2+'.sltd.geo.tif')):
-                    pairsetok.append(pair)
+            if subtract_gacos:
+                for pair in pairset:
+                    epoch1 = pair.split('_')[0]
+                    epoch2 = pair.split('_')[1]
+                    if os.path.exists(os.path.join(gacosdir,epoch1+'.sltd.geo.tif')) and os.path.exists(os.path.join(gacosdir,epoch2+'.sltd.geo.tif')):
+                        pairsetok.append(pair)
+                    else:
+                        print('skipping pair '+pair)
+                if len(pairsetok)>0:
+                    pairset = pairsetok
                 else:
-                    print('skipping pair '+pair)
-            if len(pairsetok)>0:
-                pairset = pairsetok
-            else:
-                print('WARNING, no GACOS corrections found in the '+gacosdir+' folder. Cancelling, please run without GACOS')
-                #gacoscorr = False
-                return False
+                    print('WARNING, no GACOS corrections found in the '+gacosdir+' folder. Cancelling, please run without GACOS')
+                    #gacoscorr = False
+                    return False
     # functions for multiprocessing
     def check_and_process_ifg(pair):
         if os.path.exists(os.path.join(geoifgdir, pair, pair+'.geo.diff_unfiltered_pha.tif')):
