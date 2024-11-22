@@ -58,6 +58,18 @@ def licsbas_tsdir_remove_gacos(tsgacosdir):
     #vel=np.fromfile(velfile, dtype=np.float32)
     #vel=vel.reshape(cumgacos.vel.shape)
     cumgacos.to_netcdf(cumfile)
+    os.system('rm {0}/todel.nc'.format(os.path.dirname(tsgacosdir)))
+    # recalc vel etc
+    rc = os.system('LiCSBAS_cum2vel.py -i '+tsdir+'/cum.h5 -o '+tsdir+'/tomove')
+    rc = os.system('mv '+tsdir+'/tomove.vel '+tsdir+'/results/vel')
+    cum = xr.open_dataset(cumfile)
+    b=np.fromfile(tsdir+'/results/vel', dtype=np.float32)
+    cum=cum.load()
+    cum.vel.values=b.reshape(cum.vel.shape)
+    cum.close()
+    cum.to_netcdf(cumfile)
+    rc = os.system('LiCSBAS14_vel_std.py -t '+tsdir+' --mem_size 8192')
+    rc = os.system('LiCSBAS15_mask_ts.py -t '+tsdir+' -u 0.5 -s 10 -i 700 -L 0.5 --avg_phase_bias 1 -r 10 --n_gap_use_merged')
     rc = os.system('LiCSBAS16_filt_ts.py -t '+tsdir+' --n_para 4')
 
 
