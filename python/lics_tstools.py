@@ -69,8 +69,8 @@ def licsbas_tsdir_remove_gacos(tsgacosdir):
     cum.close()
     cum.to_netcdf(cumfile)
     rc = os.system('LiCSBAS14_vel_std.py -t '+tsdir+' --mem_size 8192')
-    rc = os.system('LiCSBAS15_mask_ts.py -t '+tsdir+' -u 0.5 -s 15 -i 700 -L 0.5 --avg_phase_bias 1 -r 10 --n_gap_use_merged')
-    rc = os.system('LiCSBAS16_filt_ts.py -t '+tsdir+' --n_para 4')
+    rc = os.system('LiCSBAS15_mask_ts.py -t '+tsdir+' -c 0.1 -u 0.5 -s 15 -i 700 -L 0.35 -T 0.5 -v 10 -g 10 --avg_phase_bias 1 -r 10 --n_gap_use_merged')
+    rc = os.system('LiCSBAS16_filt_ts.py -t '+tsdir+' --interpolate_nans --n_para 4')
 
 
 ''' e.g.
