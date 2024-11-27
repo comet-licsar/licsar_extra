@@ -1267,6 +1267,7 @@ def process_frame(frame = 'dummy', ml = 10, thres = 0.3,
     raster = gdal.Open(hgtfile)
     framewid = raster.RasterXSize
     framelen = raster.RasterYSize
+    landmask_tif = None
     
     if dolocal and do_landmask:
         # this is to generate the landmask tif file in the local directory...
