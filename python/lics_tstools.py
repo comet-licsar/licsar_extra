@@ -58,9 +58,35 @@ def licsbas_tsdir_remove_gacos(tsgacosdir):
     #vel=np.fromfile(velfile, dtype=np.float32)
     #vel=vel.reshape(cumgacos.vel.shape)
     cumgacos.to_netcdf(cumfile)
-    rc = os.system('LiCSBAS16_filt_ts.py -t '+tsdir+' --n_para 4')
+    os.system('rm {0}/todel.nc'.format(os.path.dirname(tsgacosdir)))
+    # recalc vel etc
+    rc = os.system('LiCSBAS_cum2vel.py -i '+tsdir+'/cum.h5 -o '+tsdir+'/tomove')
+    rc = os.system('mv '+tsdir+'/tomove.vel '+tsdir+'/results/vel')
+    rc = os.system('mv ' + tsdir + '/tomove.vconst ' + tsdir + '/results/vconst')
+    cum = xr.open_dataset(cumfile)
+    cum=cum.load()
+    b = np.fromfile(tsdir + '/results/vel', dtype=np.float32)
+    cum.vel.values=b.reshape(cum.vel.shape)
+    b = np.fromfile(tsdir + '/results/vconst', dtype=np.float32)
+    cum.vintercept.values = b.reshape(cum.vintercept.shape)
+    cum.close()
+    cum.to_netcdf(cumfile)
+    rc = os.system('LiCSBAS14_vel_std.py -t '+tsdir+' --mem_size 8192')
+    rc = os.system('LiCSBAS15_mask_ts.py -t '+tsdir+' -c 0.1 -u 0.5 -s 15 -i 700 -L 0.35 -T 0.5 -v 10 -g 10 --avg_phase_bias 1 -r 10 --n_gap_use_merged')
+    rc = os.system('LiCSBAS16_filt_ts.py -t '+tsdir+' --nopngs --interpolate_nans --n_para 2')
 
 
+''' e.g.
+import pandas as pd
+vidsfile='chilevolcsokvids.txt'
+vids=pd.read_csv(vidsfile, header=None)
+
+for vid in vids[0].values:
+    print(vid)
+    apply_func_in_volclipdir(vid)
+
+
+'''
 def apply_func_in_volclipdir(volclip, predir = '/work/scratch-pw2/licsar/earmla/batchdir/subsets',
                              func = licsbas_tsdir_remove_gacos):
     vdir=os.path.join(predir,str(volclip))
