@@ -1584,6 +1584,7 @@ def get_ml_hgt(hgtfile, ml=1, cliparea_geo = None):
     #geoframedir = os.path.join(pubdir, str(int(frame[:3])), frame)
     #hgtfile = os.path.join(geoframedir, 'metadata', frame + '.geo.hgt.tif')
     hgt = load_tif2xr(hgtfile)
+    hgt = hgt.where(hgt != 0)
     if ml>1:
         if cliparea_geo:
             hgt = clip_xr(hgt, cliparea_geo, pxborder=ml) # debug, to match exactly the ifg
