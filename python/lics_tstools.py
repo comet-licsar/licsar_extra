@@ -10,6 +10,7 @@
 
 from lics_unwrap import *
 import re, os, glob
+from scipy.constants import speed_of_light
 #import datetime as dt
 #t1 = dt.datetime(2016, 7, 1)
 #t2 = dt.datetime(2017, 7, 31)
@@ -161,7 +162,10 @@ def correct_cum_from_tifs(cumhdfile, tifdir = 'GEOC.EPOCHS', ext='geo.iono.code.
     print('loading LiCSBAS datacube')
     cumxr = load_licsbas_cumh5_as_xrda(cumhdfile)
     print('loading external corrections')
-    cumxr = cumcube_remove_from_tifs(cumxr, tifdir, ext, tif_scale2mm, only_load_ext = not directcorrect)
+    if 'STEC' in ext.upper():
+        cumxr = cumcube_sbovl_remove_from_tifs(cumxr, tifdir, ext, tif_scale2mm, only_load_ext = not directcorrect)
+    else:
+        cumxr = cumcube_remove_from_tifs(cumxr, tifdir, ext, tif_scale2mm, only_load_ext = not directcorrect)
     if type(cumxr) == type(False):
         print('ERROR - probably the correction did not exist for some epochs. Cancelling')
         return False
@@ -186,6 +190,110 @@ def correct_cum_from_tifs(cumhdfile, tifdir = 'GEOC.EPOCHS', ext='geo.iono.code.
     cumh.to_netcdf(outputhdf)
     return True
 
+
+# looks a bit complex so I will create for sbovl specifically
+def cumcube_sbovl_remove_from_tifs(cumxr, tifdir = 'GEOC.EPOCHS', ext='geo.iono.code.sTECA.tif', tif_scale2mm = 14000, only_load_ext = False):
+    ''' Correct directly from tifs, no need to store in cubes.
+    NOTE - you can also just load the exts into the cumcube without removing anything..
+    (in any case, values are referred temporally to the first epoch)
+    
+    Args:
+        cumxr (xr.DataArray): only cum
+        tifdir:
+        ext1: sTECA
+        ext2: sTECB
+        tif_scale2mm:  for iono [rad]: 14000 for sTECA/B
+        only_load_ext:  would only load the ext files in the cube and return it (no removal!)
+        
+    Returns:
+        xr.DataArray: corrected cum values (only_load_ext=False) or only loaded corrections
+    '''
+    #if check_complete_set(cumxr.time.values)
+    #times = cumxr.time.values
+    reflon, reflat = cumxr.attrs['ref_lon'], cumxr.attrs['ref_lat']
+    #
+    firstepvals = 0
+    leneps = len(cumxr)
+    for i in range(leneps): # times first coord..
+        print('  Running for {0:6}/{1:6}th epoch'.format(i+1, leneps), flush=True, end='\r')
+        cumepoch = cumxr[i]
+        epoch = str(cumepoch.time.values).split('T')[0].replace('-','')
+        if 'STEC' in ext.upper():
+            ext1='geo.iono.code.sTECA.tif'
+            ext2='geo.iono.code.sTECB.tif'
+        extif1 = os.path.join(tifdir, epoch, epoch+'.'+ext1)
+        extif2 = os.path.join(tifdir, epoch, epoch+'.'+ext2)
+        if not os.path.exists(extif1) or not os.path.exists(extif2):
+            extif1 = os.path.join(tifdir, epoch+'.'+ext1)
+            extif2 = os.path.join(tifdir, epoch+'.'+ext2)
+        if not os.path.exists(extif1) or not os.path.exists(extif2):
+            print('\n\r WARNING: no correction available for epoch '+epoch+'. Filling with NaNs')
+            ##backward
+            extepoch1 = cumepoch.copy() * np.nan
+            extepoch1.attrs.clear()
+            #forward
+            extepoch2 = cumepoch.copy() * np.nan
+            extepoch2.attrs.clear()
+        else:
+            #backward
+            extepoch1 = load_tif2xr(extif1)
+            extepoch1 = extepoch1.where(extepoch1 != 0) # just in case...
+            extepoch1 = extepoch1.interp_like(cumepoch, method='linear') # CHECK! ##looks redundant so far (maybe not)
+            #forward
+            extepoch2 = load_tif2xr(extif2)
+            extepoch2 = extepoch2.where(extepoch2 != 0)
+            extepoch2 = extepoch2.interp_like(cumepoch, method='linear')
+            
+        ####gradient method Lazecky et al. 2023,GRL #https://github.com/comet-licsar/daz/blob/main/lib/daz_iono.py#L561
+        ###parameter for TEC gradient
+        azpix=14000
+        PRF = 486.486
+        k = 40.308193 # m^3 / s^2
+        f0 = 5.4050005e9
+        c = speed_of_light
+        
+        ##scaling_tif
+        workdir=os.getcwd()
+        frame=os.path.basename(workdir)
+        metafolder = os.path.join(os.environ['LiCSAR_public'], str(int(frame[:3])), frame, 'metadata')
+        # Check if the metadata folder exists
+        if os.path.exists(metafolder) and os.path.isdir(metafolder):
+            scaling_tif = None  # Initialize variable to track if a file is found
+            
+            for files in os.listdir(metafolder):  
+                if files.endswith('.geo.sbovl_scaling.tif'):
+                    scaling_tif = os.path.join(metafolder, files)
+            # Check if no scaling file was found
+            if scaling_tif is None:
+                print("No .geo.sbovl_scaling.tif file found in metadata folder.")
+        else:
+            print(f"metadata is not exist in LiCSAR_public")  
+
+        ##scaling2dfdc
+        scaling_factor=load_tif2xr(scaling_tif)
+        dfDC=azpix*PRF/(2*np.pi*scaling_factor)
+        fH = f0 + dfDC*0.5
+        fL = f0 - dfDC*0.5
+        tecovl=(extepoch1/fH-extepoch2/fL)
+        iono_grad = 2*PRF*k/c/dfDC * tecovl #unitless
+        iono_grad_mm=iono_grad*azpix #mm
+        
+        ##TODO check this useful for sbovl or not?
+        iono_grad_mm = iono_grad_mm - iono_grad_mm.sel(lon=reflon, lat=reflat, method='nearest') # could be done better though
+        ##downsampling
+        iono_grad_mm = iono_grad_mm.interp_like(cumxr, method='linear')
+        
+        if i == 0:
+            firstepvals = iono_grad_mm.fillna(0).values
+        # here we do diff w.r.t. first epoch
+        iono_grad_mm.values = iono_grad_mm.values - firstepvals
+        
+        if only_load_ext:
+            cumxr.values[i] = iono_grad_mm.values
+        else:
+            cumxr.values[i] = cumxr.values[i] - iono_grad_mm.values
+    print('\n\r  done')
+    return cumxr
 
 # def check_complete_set(imdates, epochsdir, ext='geo.iono.code.tif')
 def cumcube_remove_from_tifs(cumxr, tifdir = 'GEOC.EPOCHS', ext='geo.iono.code.tif', tif_scale2mm = 1, only_load_ext = False):
