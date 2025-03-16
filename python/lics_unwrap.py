@@ -224,11 +224,17 @@ def mm2rad_s1(inmm, rad2mm=False):
 intif = 'GEOC/20230129_20230210/20230129_20230210.geo.azi.tif'
 '''
 
-def unwrap_with_rngoffs(phatif, cohtif, rngtif, outtif):
+def unwrap_with_rngoffs(phatif, cohtif, rngtif, outtif, cohthres=0.15):
     ''' basically as this was done for Fentale'''
     a=filter_gold_float(rngtif) # default threshold is 5 m. should be really good enough..
     prevest=mm2rad_s1(a*1000)
-    d=process_ifg_pair(phatif, cohtif, ml = 1, fillby = 'nearest', thres = 0.15, lowpass =  False, gacoscorr = False, pre_detrend = False, outtif = outtif, prevest = prevest, keep_coh_px = 0.2)
+    d=process_ifg_pair(phatif, cohtif, ml = 1, fillby = 'nearest', thres = cohthres, lowpass =  False, gacoscorr = False, pre_detrend = False, outtif = outtif, prevest = prevest, keep_coh_px = 0.2)
+    # convert back to metres
+    dm=mm2rad_s1(d.unw, True)/1000
+    export_xr2tif(dm, outtif.replace('.tif','.m.tif'))
+    # and mask it:
+    coh = load_tif2xr(cohtif)/255
+    export_xr2tif(dm.where(coh>=cohthres), outtif.replace('.tif', '.m.masked.tif'))
     return d
 
 
