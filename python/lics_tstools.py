@@ -175,6 +175,7 @@ def correct_cum_from_tifs(cumhdfile, tifdir = 'GEOC.EPOCHS', ext='geo.iono.code.
         print('directly corrected')
         cumh.cum.values = cumh.cum.values - cumxr.values
     else:
+        print('adding extra data')
         newcumname = 'external_data'
         codes = ['iono', 'tide', 'icams']
         for c in codes:
@@ -241,11 +242,11 @@ def cumcube_sbovl_remove_from_tifs(cumxr, tifdir = 'GEOC.EPOCHS', ext='geo.iono.
             #backward
             extepoch1 = load_tif2xr(extif1)
             extepoch1 = extepoch1.where(extepoch1 != 0) # just in case...
-            # extepoch1 = extepoch1.interp_like(cumepoch, method='linear') # CHECK! ##looks redundant so far (maybe not)
+            extepoch1 = extepoch1.interp_like(cumepoch, method='linear') # CHECK! ##looks redundant so far (maybe not)
             #forward
             extepoch2 = load_tif2xr(extif2)
             extepoch2 = extepoch2.where(extepoch2 != 0)
-            # extepoch2 = extepoch2.interp_like(cumepoch, method='linear')
+            extepoch2 = extepoch2.interp_like(cumepoch, method='linear')
             
         ####gradient method Lazecky et al. 2023,GRL #https://github.com/comet-licsar/daz/blob/main/lib/daz_iono.py#L561
         ###parameter for TEC gradient
@@ -274,6 +275,7 @@ def cumcube_sbovl_remove_from_tifs(cumxr, tifdir = 'GEOC.EPOCHS', ext='geo.iono.
 
         ##scaling2dfdc
         scaling_factor=load_tif2xr(scaling_tif)
+        scaling_factor = scaling_factor.interp_like(cumepoch, method='linear')
         dfDC=azpix*PRF/(2*np.pi*scaling_factor)
         fH = f0 + dfDC*0.5
         fL = f0 - dfDC*0.5
@@ -281,7 +283,7 @@ def cumcube_sbovl_remove_from_tifs(cumxr, tifdir = 'GEOC.EPOCHS', ext='geo.iono.
         iono_grad = 2*PRF*k/c/dfDC * tecovl #unitless
         iono_grad_mm=iono_grad*azpix #mm
         
-        ##TODO check this useful for sbovl or not?
+        ##TODO check this useful for sbovl or not? We are using absolute so skip that! 
         # ref_value = iono_grad_mm.sel(lon=reflon, lat=reflat, method='nearest')
         # # If ref_value is NaN, replace it with 0
         # if np.isnan(ref_value.values):
@@ -292,11 +294,9 @@ def cumcube_sbovl_remove_from_tifs(cumxr, tifdir = 'GEOC.EPOCHS', ext='geo.iono.
         # # Apply reference correction
         # iono_grad_mm = iono_grad_mm - ref_value
         
-        ##fill na with 0
-        iono_grad_mm=iono_grad_mm.fillna(0)
-        ##downsampling
-        iono_grad_mm = iono_grad_mm.interp_like(cumxr, method='linear')
-        
+        # ##fill na with 0
+        # iono_grad_mm=iono_grad_mm.fillna(0)
+                
         if i == 0:
             firstepvals = iono_grad_mm.fillna(0).values
         # here we do diff w.r.t. first epoch
