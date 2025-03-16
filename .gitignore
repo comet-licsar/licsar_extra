@@ -6,3 +6,4 @@
 .idea/vcs.xml
 .idea/workspace.xml
 bashrc_licsar_extra.sh
+__pycache__/
