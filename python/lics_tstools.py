@@ -449,7 +449,7 @@ def load_metatif(keystr='U', geocdir='GEOC', frame=None):
         return False
 
 
-def generate_pmm_velocity(frame, plate = 'Eurasia', geocdir = None, outif = None):
+def generate_pmm_velocity(frame, plate = 'Eurasia', geocdir = None, outif = None, sboi=False):
     '''This will generate LOS velocity for selected tectonic plate, such as for absolute referencing towards Eurasia..
     uses MintPy functionality that implements velocity calculation using Euler poles rather than plate motion model with plates defined as polygons.
 
@@ -470,10 +470,17 @@ def generate_pmm_velocity(frame, plate = 'Eurasia', geocdir = None, outif = None
     # pole_obj.print_info()
 
     # getting the frame data
-    E = load_metatif('E', geocdir, frame)
-    N = load_metatif('N', geocdir, frame)
-    U = load_metatif('U', geocdir, frame)
-
+    print(sboi)
+    if sboi:
+        print('PMM calculation in azimuth direction')
+        E = load_metatif('E.azi', geocdir, frame)
+        N = load_metatif('N.azi', geocdir, frame)
+        U = load_metatif('U.azi', geocdir, frame)
+    else:
+        print('PMM calculation in range direction')
+        E = load_metatif('E', geocdir, frame)
+        N = load_metatif('N', geocdir, frame)
+        U = load_metatif('U', geocdir, frame)
     # coarsening unit vector U as template for the plate velocity
     resolution = get_resolution(U, in_m=True)  # just mean avg in both lon, lat should be ok
     # how large area is covered
@@ -507,7 +514,10 @@ def generate_pmm_velocity(frame, plate = 'Eurasia', geocdir = None, outif = None
 
     # 2.
     print('Calculating the plate motion velocity in LOS (please check the sign here)')
-    vlos_plate = ve*E + vn*N + vu*U
+    if sboi:
+        vlos_plate = ve*E + vn*N
+    else:
+        vlos_plate = ve*E + vn*N + vu*U
     vlos_plate = 1000*vlos_plate # to mm/year
     if outif:
         export_xr2tif(vlos_plate, outif, dogdal = False)
