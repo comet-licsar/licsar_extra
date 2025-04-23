@@ -218,6 +218,7 @@ def cumcube_sbovl_remove_from_tifs(cumxr, tifdir = 'GEOC.EPOCHS', ext='geo.iono.
     print('sbovl activated')
     firstepvals = 0
     leneps = len(cumxr)
+    error_log = []
     for i in range(leneps): # times first coord..
         print('  Running for {0:6}/{1:6}th epoch'.format(i+1, leneps), flush=True, end='\r')
         cumepoch = cumxr[i]
@@ -230,15 +231,10 @@ def cumcube_sbovl_remove_from_tifs(cumxr, tifdir = 'GEOC.EPOCHS', ext='geo.iono.
         if not os.path.exists(extif1) or not os.path.exists(extif2):
             extif1 = os.path.join(tifdir, epoch+'.'+ext1)
             extif2 = os.path.join(tifdir, epoch+'.'+ext2)
-        if not os.path.exists(extif1) or not os.path.exists(extif2):
-            print('\n\r WARNING: no correction available for epoch '+epoch+'. Filling with NaNs')
-            ##backward
-            extepoch1 = cumepoch.copy() * np.nan
-            extepoch1.attrs.clear()
-            #forward
-            extepoch2 = cumepoch.copy() * np.nan
-            extepoch2.attrs.clear()
-        else:
+        
+        try:
+            if not os.path.exists(extif1) or not os.path.exists(extif2):
+                raise FileNotFoundError(f'File not found: {extif1} or {extif2}')
             #backward
             extepoch1 = load_tif2xr(extif1)
             extepoch1 = extepoch1.where(extepoch1 != 0) # just in case...
@@ -248,40 +244,47 @@ def cumcube_sbovl_remove_from_tifs(cumxr, tifdir = 'GEOC.EPOCHS', ext='geo.iono.
             extepoch2 = extepoch2.where(extepoch2 != 0)
             extepoch2 = extepoch2.interp_like(cumepoch, method='linear')
             
-        ####gradient method Lazecky et al. 2023,GRL #https://github.com/comet-licsar/daz/blob/main/lib/daz_iono.py#L561
-        ###parameter for TEC gradient
-        azpix=14000
-        PRF = 486.486
-        k = 40.308193 # m^3 / s^2
-        f0 = 5.4050005e9
-        c = speed_of_light
+            ####gradient method Lazecky et al. 2023,GRL #https://github.com/comet-licsar/daz/blob/main/lib/daz_iono.py#L561
+            ###parameter for TEC gradient
+            azpix=14000
+            PRF = 486.486
+            k = 40.308193 # m^3 / s^2
+            f0 = 5.4050005e9
+            c = speed_of_light
         
-        ##scaling_tif
-        workdir=os.getcwd()
-        frame=os.path.basename(workdir)
-        metafolder = os.path.join(os.environ['LiCSAR_public'], str(int(frame[:3])), frame, 'metadata')
-        # Check if the metadata folder exists
-        if os.path.exists(metafolder) and os.path.isdir(metafolder):
-            scaling_tif = None  # Initialize variable to track if a file is found
-            
-            for files in os.listdir(metafolder):  
-                if files.endswith('.geo.sbovl_scaling.tif'):
-                    scaling_tif = os.path.join(metafolder, files)
-            # Check if no scaling file was found
-            if scaling_tif is None:
-                print("No .geo.sbovl_scaling.tif file found in metadata folder.")
-        else:
-            print(f"metadata is not exist in LiCSAR_public")  
+            ##scaling_tif
+            workdir=os.getcwd()
+            frame=os.path.basename(workdir)
+            metafolder = os.path.join(os.environ['LiCSAR_public'], str(int(frame[:3])), frame, 'metadata')
+            # Check if the metadata folder exists
+            if os.path.exists(metafolder) and os.path.isdir(metafolder):
+                scaling_tif = None  # Initialize variable to track if a file is found
+                
+                for files in os.listdir(metafolder):  
+                    if files.endswith('bovl_scaling.tif'):
+                        scaling_tif = os.path.join(metafolder, files)
+                     
+                # Check if no scaling file was found
+                if scaling_tif is None:
+                    raise FileNotFoundError("No .geo.sbovl_scaling.tif file found in metadata folder.")
+            else:
+                raise FileNotFoundError("metadata is not exist in LiCSAR_public")    
 
-        ##scaling2dfdc
-        scaling_factor=load_tif2xr(scaling_tif)
-        scaling_factor = scaling_factor.interp_like(cumepoch, method='linear')
-        dfDC=azpix*PRF/(2*np.pi*scaling_factor)
-        fH = f0 + dfDC*0.5
-        fL = f0 - dfDC*0.5
-        tecovl=(extepoch1/fH-extepoch2/fL)
-        iono_grad = 2*PRF*k/c/dfDC * tecovl #unitless
-        iono_grad_mm=iono_grad*azpix #mm
+            ##scaling2dfdc
+            scaling_factor=load_tif2xr(scaling_tif)
+            scaling_factor = scaling_factor.interp_like(cumepoch, method='linear')
+            dfDC=azpix*PRF/(2*np.pi*scaling_factor)
+            fH = f0 + dfDC*0.5
+            fL = f0 - dfDC*0.5
+            tecovl=(extepoch1/fH-extepoch2/fL)
+            iono_grad = 2*PRF*k/c/dfDC * tecovl #unitless
+            iono_grad_mm=iono_grad*azpix #mm
+            
+        except Exception as e:
+            print(f'\n\r WARNING: failed to load or compute correction for epoch {epoch}: {str(e)}')
+            error_log.append(epoch)
+            iono_grad_mm = cumepoch.copy() * np.nan
+            iono_grad_mm.attrs.clear()
         
         ##TODO check this useful for sbovl or not? We are using absolute so skip that! 
         # ref_value = iono_grad_mm.sel(lon=reflon, lat=reflat, method='nearest')
@@ -307,6 +310,13 @@ def cumcube_sbovl_remove_from_tifs(cumxr, tifdir = 'GEOC.EPOCHS', ext='geo.iono.
         else:
             cumxr.values[i] = cumxr.values[i] - iono_grad_mm.values
     print('\n\r  done')
+    
+    # Save the list of failed epochs
+    if error_log:
+        with open(f"failed_{ext}.txt", "w") as f:
+            for epoch in error_log:
+                f.write(epoch + "\n")
+        print(f"\nSaved list of failed epochs to failed_{ext}.txt")
     return cumxr
 
 # def check_complete_set(imdates, epochsdir, ext='geo.iono.code.tif')
@@ -331,6 +341,8 @@ def cumcube_remove_from_tifs(cumxr, tifdir = 'GEOC.EPOCHS', ext='geo.iono.code.t
     #
     firstepvals = 0
     leneps = len(cumxr)
+    error_log = [] ##to save/remove/recreate for second iteration
+    
     for i in range(leneps): # times first coord..
         print('  Running for {0:6}/{1:6}th epoch'.format(i+1, leneps), flush=True, end='\r')
         cumepoch = cumxr[i]
@@ -338,17 +350,23 @@ def cumcube_remove_from_tifs(cumxr, tifdir = 'GEOC.EPOCHS', ext='geo.iono.code.t
         extif = os.path.join(tifdir, epoch, epoch+'.'+ext)
         if not os.path.exists(extif):
             extif = os.path.join(tifdir, epoch + '.' + ext)
-        if not os.path.exists(extif):
-            print('\n\r WARNING: no correction available for epoch '+epoch+'. Filling with NaNs')
-            extepoch = cumepoch.copy() * np.nan
-            extepoch.attrs.clear()
-        else:
+        
+        try:
+            if not os.path.exists(extif):
+                raise FileNotFoundError(f'File not found: {extif}')
             extepoch = load_tif2xr(extif)
             extepoch = extepoch.where(extepoch != 0) # just in case...
             extepoch = extepoch * tif_scale2mm
             extepoch = extepoch.interp_like(cumepoch, method='linear') # CHECK!
             if not sbovl:
                 extepoch = extepoch - extepoch.sel(lon=reflon, lat=reflat, method='nearest') # could be done better though
+        except Exception as e:
+            print(f'\n\r WARNING: failed to load correction for epoch {epoch}: {str(e)}')
+            error_log.append(extif)
+            extepoch = cumepoch.copy() * np.nan
+            extepoch.attrs.clear()    
+            
+            
         if i == 0:
             firstepvals = extepoch.fillna(0).values
         # here we do diff w.r.t. first epoch
@@ -360,6 +378,14 @@ def cumcube_remove_from_tifs(cumxr, tifdir = 'GEOC.EPOCHS', ext='geo.iono.code.t
         else:
             cumxr.values[i] = cumxr.values[i] - extepoch.values
     print('\n\r  done')
+    
+    # Save the list of failed paths
+    if error_log:
+        with open(f"failed_{ext}.txt", "w") as f:
+            for path in error_log:
+                f.write(path + "\n")
+        print(f"\nSaved list of corrupted or missing files to corrupted_ext_tifs.txt")
+
     #if only_load_ext:
     #    cumxr = cumxr-cumxr[0] #.cumsum(axis=0)
     #    cumxr = cumxr.cumsum(axis=0)-cumxr[0]
