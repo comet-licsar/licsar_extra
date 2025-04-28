@@ -470,7 +470,6 @@ def generate_pmm_velocity(frame, plate = 'Eurasia', geocdir = None, outif = None
     # pole_obj.print_info()
 
     # getting the frame data
-    print(sboi)
     if sboi:
         print('PMM calculation in azimuth direction')
         E = load_metatif('E.azi', geocdir, frame)
@@ -513,10 +512,11 @@ def generate_pmm_velocity(frame, plate = 'Eurasia', geocdir = None, outif = None
     vu = Uml.interp_like(U, method='linear', kwargs={"fill_value": "extrapolate"})
 
     # 2.
-    print('Calculating the plate motion velocity in LOS (please check the sign here)')
     if sboi:
+        print('Calculating the plate motion velocity in Azi (please check the sign here)')
         vlos_plate = ve*E + vn*N
     else:
+        print('Calculating the plate motion velocity in LOS (please check the sign here)')
         vlos_plate = ve*E + vn*N + vu*U
     vlos_plate = 1000*vlos_plate # to mm/year
     if outif:
