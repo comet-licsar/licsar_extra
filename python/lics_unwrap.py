@@ -346,7 +346,7 @@ def process_ifg(frame, pair, procdir = os.getcwd(),
         cliparea_geo = None, outtif = None, prevest = None, prev_ramp = None,
         coh2var = False, add_resid = True,  rampit=False, subtract_gacos = False, dolocal = False,
         extweights = None, extweights_mask_threshold = 0.25, keep_coh_debug = True, keep_coh_px = 0.25,
-        do_landmask = True, use_gamma = False):
+        do_landmask = True, use_gamma = False, use_rg_offs = False):
     """Main function to unwrap a geocoded LiCSAR interferogram. Works on JASMIN (but can be easily adapted for local use)
     
     Args:
@@ -380,7 +380,8 @@ def process_ifg(frame, pair, procdir = os.getcwd(),
         extweights (np.ndarray): external weights, e.g. amplitude stability or coherence ratio (or another array) to be used for weighting the phase instead of the original coherence
         keep_coh_debug (boolean): only in combination with use_coh_stab or use_amp_stab - whether or not to keep original (downsampled) ifg coherence after using the amp/coh_stab to weight the phase during multilooking
         keep_coh_px (float or None): threshold for coherence upon which pixels would be unmasked (default: 0.25, use None or False to not add back coherent pixels). Practically, we mask based on consistence and then unmask coherent pixels.
-    
+        use_rg_offs (boolean): if True, will try find and use range offsets to support unwrapping
+
     Returns:
         xarray.Dataset: unwrapped multilooked interferogram with additional layers
     """
@@ -415,7 +416,11 @@ def process_ifg(frame, pair, procdir = os.getcwd(),
             gacosdiff = None
         else:
             gacoscorr = False
-    
+
+    if use_rg_offs:
+        # assuming rng tif file location
+        print('This is not implemented yet - assuming rg offsets not found for pair '+pair)
+
     #if gacoscorr:
     #    gacoscorrfile = os.path.join(tmpgendir,'gacos.tif')
     #    try:
@@ -1177,7 +1182,7 @@ def process_frame(frame = 'dummy', ml = 10, thres = 0.3,
             nproc = 1, dolocal = False, specmag = False, defomax = 0.3,
             use_amp_stab = False, use_coh_stab = False, use_amp_coh = False, keep_coh_debug = True,
             freq=5405000000, gacosdir = '../GACOS', do_landmask = True, prefer_unfiltered = True,
-            fillby = 'nearest'):
+            fillby = 'nearest', use_rg_offs = False):
     """Main function to process whole LiCSAR frame (i.e. unwrap all available interferograms within the frame). Works only at JASMIN.
 
     Args:
@@ -1200,7 +1205,8 @@ def process_frame(frame = 'dummy', ml = 10, thres = 0.3,
         nproc (int): use multiprocessing (one core per interferogram), not well tested, uses pathos
         dolocal (boolean): switch to use local directory to find interferograms, rather than search for LiCSAR_public directory in JASMIN
         do_landmask (boolean): if True, we will use GMT to prepare and use landmask if it does not exist
-        
+
+        use_rg_offs (boolean): if True, it will try find and use range offsets to support unwrapping
         use_amp_stab (boolean): apply amplitude stability index instead of coherence-per-interferogram for unwrapping
         use_coh_stab (boolean): apply (experimental) coherence stability index. not recommended (seems not logical to me) - worth investigating though (maybe helps against loop closure errors)
         use_amp_coh (boolean): another experiment, using avg amp multiplied by avg coh (of 12-day combinations, hardcoded now) as weights
@@ -1487,16 +1493,27 @@ def process_frame(frame = 'dummy', ml = 10, thres = 0.3,
                                 lowpass=lowpass, goldstein=goldstein, specmag = specmag, pre_detrend = pre_detrend,
                                 keep_coh_debug = keep_coh_debug, gacoscorr = gacoscorr, cliparea_geo = cliparea_geo,
                                 subtract_gacos = subtract_gacos, dolocal=dolocal, do_landmask = do_landmask,
-                                prefer_unfiltered = prefer_unfiltered)
+                                prefer_unfiltered = prefer_unfiltered, use_rg_offs = use_rg_offs)
                     else:
                         phatif=os.path.join(geoifgdir, pair, pair+'.geo.'+ext+'.tif')
                         cohtif=os.path.join(geoifgdir, pair, pair+'.geo.cc.tif')
                         print('debug - local here')
+                        prevest = None
+                        if use_rg_offs:
+                            rngtif = os.path.join(geoifgdir, pair, pair+'.geo.rng.tif')
+                            if os.path.exists(rngtif):
+                                print('filtering range offsets for pair '+pair)
+                                prevest = filter_gold_float(rngtif)
+                                prevest = mm2rad_s1(prevest * 1000)
+                                if export_to_tif:
+                                    outtif = os.path.join(pair, pair + '.geo.rngunw.tif')
+                            else:
+                                print('WARNING: range offsets do not exist for pair '+pair)
                         ifg_ml = process_ifg_pair(phatif, cohtif, procpairdir = os.path.join(procdir,pair), ml = ml, hgtcorr = hgtcorr, fillby = fillby,
                                                  thres = thres, defomax = defomax, add_resid = True, outtif = outtif, extweights = extweights, smooth = smooth,
                                                  lowpass=lowpass, goldstein=goldstein, specmag = specmag, pre_detrend = pre_detrend, landmask_tif = landmask_tif,
                                                  keep_coh_debug = keep_coh_debug, gacoscorr = gacoscorr, cliparea_geo = cliparea_geo,
-                                                 subtract_gacos = subtract_gacos, cascade = cascade, use_gamma = use_gamma)
+                                                 subtract_gacos = subtract_gacos, cascade = cascade, use_gamma = use_gamma, prevest = prevest)
                     (ifg_ml.unw.where(ifg_ml.mask_full > 0).values).astype(np.float32).tofile(pair+'/'+pair+'.unw')
                     ((ifg_ml.coh.where(ifg_ml.mask > 0)*255).astype(np.byte).fillna(0).values).tofile(pair+'/'+pair+'.cc')
                     if 'conncomp' in ifg_ml:
