@@ -3108,7 +3108,7 @@ def correct_hgt(ifg_mlc, blocklen = 20, tmpdir = os.getcwd(), dounw = True, num_
         while aaa.hgtcorr.isnull().max() == True:
             aaa.hgtcorr.values = interpolate_replace_nans(aaa.hgtcorr.values, kernel)
         #interpolate it to the higher resolution
-        out = aaa.hgtcorr.interp_like(ifg_ml, method='linear')
+        out = aaa.hgtcorr.interp_like(ifg_mlc, method='linear')
         # but here edges are again nans!
         kernel = Gaussian2DKernel(x_stddev=1.5)
         while out.isnull().max() == True:
@@ -3896,7 +3896,7 @@ def get_date_matrix(pairs):
     return date_matrix
 
 
-def build_amp_avg_std(frame, return_ampstab = False):    #, input_is_intensity=True):
+def build_amp_avg_std(frame, return_ampstab = False, input_is_intensity = True):    #, input_is_intensity=True):
     """Builds amplitude stability map (or just avg/std amplitude) of a frame
     Args:
         frame (str)
