@@ -143,7 +143,7 @@ def load_licsbas_cumh5_as_xrda(cumfile):
     return cumxr
 
 
-def correct_cum_from_tifs(cumhdfile, tifdir = 'GEOC.EPOCHS', ext='geo.iono.code.tif', tif_scale2mm = 1, sbovl=False ,outputhdf = None, directcorrect = True):
+def correct_cum_from_tifs(cumhdfile, tifdir = 'GEOC.EPOCHS', ext='geo.iono.code.tif', tif_scale2mm = 1, sbovl=False ,outputhdf = None, directcorrect = True, newcumname = 'external_data'):
     ''' This will load the cum.h5 and either correct cum layer (if directcorrect==True) or add new data var to the cube (if not directcorrect)
 
     Args:
@@ -175,8 +175,6 @@ def correct_cum_from_tifs(cumhdfile, tifdir = 'GEOC.EPOCHS', ext='geo.iono.code.
         print('directly corrected')
         cumh.cum.values = cumh.cum.values - cumxr.values
     else:
-        print('adding extra data')
-        newcumname = 'external_data'
         codes = ['iono', 'tide', 'icams']
         for c in codes:
             if ext.find(c)>-1:
