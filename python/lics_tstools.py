@@ -175,7 +175,7 @@ def correct_cum_from_tifs(cumhdfile, tifdir = 'GEOC.EPOCHS', ext='geo.iono.code.
         print('directly corrected')
         cumh.cum.values = cumh.cum.values - cumxr.values
     else:
-        codes = ['iono', 'tide', 'icams']
+        codes = ['iono', 'tide', 'icams', 'sltd']
         for c in codes:
             if ext.find(c)>-1:
                 newcumname = c
