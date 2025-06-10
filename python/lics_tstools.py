@@ -112,7 +112,8 @@ def apply_func_in_volclipdir(volclip, predir = '/work/scratch-pw2/licsar/earmla/
 
 def load_licsbas_cumh5_as_xrda(cumfile):
     ''' Loads cum.h5 (now only cum layer) as standard xr.DataArray (in lon/lat)'''
-    cum = xr.load_dataset(cumfile)
+    # print(cumfile)
+    cum = xr.load_dataset(cumfile) #, engine='h5netcdf')  # or 'netcdf4'
     #
     sizex = len(cum.vel[0])
     sizey = len(cum.vel)
@@ -173,7 +174,8 @@ def correct_cum_from_tifs(cumhdfile, tifdir = 'GEOC.EPOCHS', ext='geo.iono.code.
     cumh = xr.load_dataset(cumhdfile)
     if directcorrect:
         print('directly corrected')
-        cumh.cum.values = cumh.cum.values - cumxr.values
+        # breakpoint()
+        cumh.cum.values = cumxr.values ## we already correct it in the cumcube_remove_from_tifs #MN
     else:
         codes = ['iono', 'tide', 'icams', 'sltd']
         for c in codes:
@@ -271,7 +273,8 @@ def cumcube_sbovl_remove_from_tifs(cumxr, tifdir = 'GEOC.EPOCHS', ext='geo.iono.
             ##scaling2dfdc
             scaling_factor=load_tif2xr(scaling_tif)
             scaling_factor = scaling_factor.interp_like(cumepoch, method='linear')
-            dfDC=azpix*PRF/(2*np.pi*scaling_factor)
+            # dfDC=azpix*PRF/(2*np.pi*scaling_factor)
+            dfDC=4350 #TODO, this is a constant value for now, but should be calculated from scaling_factor #MN
             fH = f0 + dfDC*0.5
             fL = f0 - dfDC*0.5
             tecovl=(extepoch1/fH-extepoch2/fL)
@@ -285,15 +288,15 @@ def cumcube_sbovl_remove_from_tifs(cumxr, tifdir = 'GEOC.EPOCHS', ext='geo.iono.
             iono_grad_mm.attrs.clear()
         
         ##TODO check this useful for sbovl or not? We are using absolute so skip that! 
-        # ref_value = iono_grad_mm.sel(lon=reflon, lat=reflat, method='nearest')
-        # # If ref_value is NaN, replace it with 0
-        # if np.isnan(ref_value.values):
-        #     ref_value = 0  # Assign zero to avoid NaN propagation
-        # else:
-        #     ref_value = ref_value.values  # Extract actual value
+        ref_value = iono_grad_mm.sel(lon=reflon, lat=reflat, method='nearest')
+        # If ref_value is NaN, replace it with 0
+        if np.isnan(ref_value.values):
+            ref_value = 0  # Assign zero to avoid NaN propagation
+        else:
+            ref_value = ref_value.values  # Extract actual value
 
-        # # Apply reference correction
-        # iono_grad_mm = iono_grad_mm - ref_value
+        # Apply reference correction
+        iono_grad_mm = iono_grad_mm - ref_value
         
         # ##fill na with 0
         # iono_grad_mm=iono_grad_mm.fillna(0)
@@ -356,8 +359,9 @@ def cumcube_remove_from_tifs(cumxr, tifdir = 'GEOC.EPOCHS', ext='geo.iono.code.t
             extepoch = extepoch.where(extepoch != 0) # just in case...
             extepoch = extepoch * tif_scale2mm
             extepoch = extepoch.interp_like(cumepoch, method='linear') # CHECK!
-            if not sbovl:
-                extepoch = extepoch - extepoch.sel(lon=reflon, lat=reflat, method='nearest') # could be done better though
+            # if not sbovl_abs:
+                # reflon, reflat = cumxr.attrs['ref_lon'], cumxr.attrs['ref_lat']
+            extepoch = extepoch - extepoch.sel(lon=reflon, lat=reflat, method='nearest') # could be done better though
         except Exception as e:
             print(f'\n\r WARNING: failed to load correction for epoch {epoch}: {str(e)}')
             error_log.append(extif)
