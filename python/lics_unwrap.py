@@ -3938,7 +3938,7 @@ def build_coh_avg_std(frame, ifgdir = None, days = 'all', monthly = False, outno
         monthly (boolean): if True, generate the coh maps per calendar month (generates 12 geotiff files). By default: False
         outnopx (boolean): if True, outputs also map of number of non-NaN pixels used to generate the mean coh map. By default: False
         do_std (boolean): if True, generates also std dev of coherence in time. By default: False
-        do_tif (boolean): if True, exports the output geotiff to LiCSAR_public (as e.g. FRAME.geo.meancoh.all.tif)
+        do_tif (boolean): if True, exports the output geotiff (as e.g. FRAME.geo.meancoh.all.tif)
     
     Returns:
         xr.DataArray [, xr.DataArray, xr.DataArray]
@@ -3992,7 +3992,8 @@ def build_coh_avg_std(frame, ifgdir = None, days = 'all', monthly = False, outno
                             except:
                                 print('debug: cohavgA is already with lon, lat - check it further')
                                 cohavgE = cohavgA.sortby(['lon','lat'])
-                            export_xr2tif(cohavgE, outtif, debug = False)
+                            export_xr2tif(cohavgE, outtif, dogdal = False, debug = False)
+                            print('exported to: ' + outtif)
                 # cohavgB.plot(vmin=0,vmax=0.9)
                 # plt.show()
                 #for ddays in days:
@@ -4020,7 +4021,8 @@ def build_coh_avg_std(frame, ifgdir = None, days = 'all', monthly = False, outno
         cohavg = (cohavg*255).astype(np.uint8)
         cohavg.attrs['NUMBER_OF_INPUT_FILES'] = nopx
         cohavg = cohavg.rename({'x': 'lon','y': 'lat'}).sortby(['lon','lat'])
-        export_xr2tif(cohavg, outtif, debug = False)
+        export_xr2tif(cohavg, outtif, dogdal = False, debug = False)
+        print('exported to: '+outtif)
     if outnopx:
         nopx = len(pairs)
         return cohavg, cohstd, nopx
