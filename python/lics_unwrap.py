@@ -565,7 +565,7 @@ def process_ifg_pair(phatif, cohtif, procpairdir = os.getcwd(), landmask_tif = N
             cliparea_geo = cliparea_geo, outtif = outtif, prevest = prevest, prev_ramp = prev_ramp,
             coh2var = coh2var, add_resid = add_resid,  rampit=rampit, subtract_gacos = subtract_gacos,
             extweights = extweights, keep_coh_debug = keep_coh_debug, keep_coh_px = keep_coh_px,
-            tmpdir = tmpdir, use_gamma = use_gamma)
+            tmpdir = tmpdir, use_gamma = use_gamma, spatialmask_km = spatialmask_km)
     else:
         print('performing 1 step cascade')
         ml10=10*ml
@@ -576,14 +576,14 @@ def process_ifg_pair(phatif, cohtif, procpairdir = os.getcwd(), landmask_tif = N
             cliparea_geo = cliparea_geo, outtif = None, prevest = prevest, prev_ramp = prev_ramp,
             coh2var = coh2var, add_resid = False,  rampit=True, subtract_gacos = False,
             extweights = extweights, keep_coh_debug = keep_coh_debug, keep_coh_px = keep_coh_px,
-            tmpdir = tmpdir, use_gamma = use_gamma)
+            tmpdir = tmpdir, use_gamma = use_gamma, spatialmask_km = spatialmask_km)
         ifg_ml = process_ifg_core(ifg, 
             ml = ml, fillby = fillby, thres = thres, smooth = smooth, lowpass = lowpass, goldstein = goldstein, specmag = specmag,
             defomax = defomax, hgtcorr = False, gacoscorr = gacoscorr, pre_detrend = pre_detrend,
             cliparea_geo = cliparea_geo, outtif = outtif, prevest = prevest, prev_ramp = ifg_ml10['unw'],
             coh2var = coh2var, add_resid = True,  rampit=rampit, subtract_gacos = subtract_gacos,
             extweights = extweights, keep_coh_debug = keep_coh_debug, keep_coh_px = keep_coh_px,
-            tmpdir = tmpdir, use_gamma = use_gamma)
+            tmpdir = tmpdir, use_gamma = use_gamma, spatialmask_km = spatialmask_km)
         ifg_ml10 = 0
     return ifg_ml
 
