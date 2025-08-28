@@ -27,6 +27,117 @@ def grep1line(arg,filename):
         res = res.split('\n')[0]
     return res
 
+def loadall2cube(cumfile, extracols=['loop_ph_avg_abs']):
+    cumdir = os.path.dirname(cumfile)
+    cohfile = os.path.join(cumdir,'results/coh_avg')
+    rmsfile = os.path.join(cumdir,'results/resid_rms')
+    vstdfile = os.path.join(cumdir,'results/vstd')
+    stcfile = os.path.join(cumdir,'results/stc')
+    maskfile = os.path.join(cumdir,'results/mask')
+    metafile = os.path.join(cumdir,'../../metadata.txt')
+    #h5datafile = 'cum.h5'
+    cum = xr.load_dataset(cumfile)
+    
+    sizex = len(cum.vel[0])
+    sizey = len(cum.vel)
+    
+    lon = cum.corner_lon.values+cum.post_lon.values*np.arange(sizex)-0.5*float(cum.post_lon)
+    lat = cum.corner_lat.values+cum.post_lat.values*np.arange(sizey)+0.5*float(cum.post_lat)  # maybe needed? yes! for gridline/AREA that is default in rasterio...
+    
+    time = np.array(([dt.datetime.strptime(str(imd), '%Y%m%d') for imd in cum.imdates.values]))
+    
+    velxr = xr.DataArray(cum.vel.values.reshape(sizey,sizex), coords=[lat, lon], dims=["lat", "lon"])
+    #LiCSBAS uses 0 instead of nans...
+    velxr = velxr.where(velxr!=0)
+    velxr.attrs['unit'] = 'mm/year'
+    #vinterceptxr = xr.DataArray(cum.vintercept.values.reshape(sizey,sizex), coords=[lat, lon], dims=["lat", "lon"])
+    
+    cumxr = xr.DataArray(cum.cum.values, coords=[time, lat, lon], dims=["time","lat", "lon"])
+    cumxr.attrs['unit'] = 'mm'
+    #bperpxr = xr.DataArray(cum.bperp.values, coords=[time], dims=["time"])
+    
+    cube = xr.Dataset()
+    cube['cum'] = cumxr
+    cube['vel'] = velxr
+    #cube['vintercept'] = vinterceptxr
+    try:
+        cube['bperp'] = xr.DataArray(cum.bperp.values, coords=[time], dims=["time"])
+        cube['bperp'] = cube.bperp.where(cube.bperp!=0)
+        # re-ref it to the first date
+        if np.isnan(cube['bperp'][0]):
+            firstbperp = 0
+        else:
+            firstbperp = cube['bperp'][0]
+        cube['bperp'] = cube['bperp'] - firstbperp
+        cube['bperp'] = cube.bperp.astype(np.float32)
+        cube.bperp.attrs['unit'] = 'm'
+    except:
+        print('some error loading bperp info')
+    
+    #if 'mask' in cum:
+    #    # means this is filtered version, i.e. cum_filt.h5
+    cube.attrs['filtered_version'] = 'mask' in cum
+    
+    #add coh_avg resid_rms vstd
+    if os.path.exists(cohfile):
+        infile = np.fromfile(cohfile, 'float32')
+        cohxr = xr.DataArray(infile.reshape(sizey,sizex), coords=[lat, lon], dims=["lat", "lon"])
+        cube['coh'] = cohxr
+        cube.coh.attrs['unit']='unitless'
+    else: print('No coh_avg file detected, skipping')
+    if os.path.exists(rmsfile):
+        infile = np.fromfile(rmsfile, 'float32')
+        rmsxr = xr.DataArray(infile.reshape(sizey,sizex), coords=[lat, lon], dims=["lat", "lon"])
+        rmsxr.attrs['unit'] = 'mm'
+        cube['rms'] = rmsxr
+    else: print('No RMS file detected, skipping')
+    try:
+        for e in extracols:
+            efile=os.path.join(cumdir,'results',e)
+            if os.path.exists(efile):
+                infile = np.fromfile(efile, 'float32')   # should be always float. but we can check with os.stat('loop_ph_avg_abs').st_size
+                exr = xr.DataArray(infile.reshape(sizey, sizex), coords=[lat, lon], dims=["lat", "lon"])
+                #rmsxr.attrs['unit'] = 'mm'
+                cube[e] = exr
+            else:
+                print('No '+e+' file detected, skipping')
+    except:
+        print('debug - extra layers not included')
+    if os.path.exists(vstdfile):
+        infile = np.fromfile(vstdfile, 'float32')
+        vstdxr = xr.DataArray(infile.reshape(sizey,sizex), coords=[lat, lon], dims=["lat", "lon"])
+        vstdxr.attrs['unit'] = 'mm/year'
+        cube['vstd'] = vstdxr
+    else: print('No vstd file detected, skipping')
+    if os.path.exists(stcfile):
+        infile = np.fromfile(stcfile, 'float32')
+        stcxr = xr.DataArray(infile.reshape(sizey,sizex), coords=[lat, lon], dims=["lat", "lon"])
+        stcxr.attrs['unit'] = 'mm'
+        cube['stc'] = stcxr
+    else: print('No stc file detected, skipping')
+    if os.path.exists(maskfile):
+        infile = np.fromfile(maskfile, 'float32')
+        #infile = np.nan_to_num(infile,0).astype(int)  # change nans to 0
+        infile = np.nan_to_num(infile,0).astype(np.int8)  # change nans to 0
+        maskxr = xr.DataArray(infile.reshape(sizey,sizex), coords=[lat, lon], dims=["lat", "lon"])
+        maskxr.attrs['unit'] = 'unitless'
+        cube['mask'] = maskxr
+    else: print('No mask file detected, skipping')
+    # add inc_angle
+    if os.path.exists(metafile):
+        #a = subp.run(['grep','inc_angle', metafile], stdout=subp.PIPE)
+        #inc_angle = float(a.stdout.decode('utf-8').split('=')[1])
+        inc_angle = float(grep1line('inc_angle',metafile).split('=')[1])
+        cube.attrs['inc_angle'] = inc_angle
+    else: print('')#'warning, metadata file not found. using general inc angle value')
+        #inc_angle = 39
+    
+    #cube['bperp'] = bperpxr
+    #cube[]
+    cube.rio.set_spatial_dims(x_dim="lon", y_dim="lat", inplace=True)
+    cube.rio.write_crs("EPSG:4326", inplace=True)
+    #cube = cube.sortby(['time','lon','lat']) # 2025/03: not really right as lat should be opposite-signed..
+    return cube
 
 
 def licsbas_tsdir_remove_gacos(tsgacosdir):
