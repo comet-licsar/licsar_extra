@@ -1999,8 +1999,11 @@ def load_from_tifs(phatif, cohtif, magtif = None, landmask_tif = None, cliparea_
         # now will clip it - lat is opposite-sorted, so need to slice from max to min in y
         ifg = ifg.sel(lon=slice(minclipx, maxclipx), lat=slice(maxclipy, minclipy))
     ifg['cpx'] = ifg.coh.copy()
-    print('WARNING, using coherence to form cpx')
-    ifg['cpx'].values = magpha2RI_array(ifg.coh.values, ifg.pha.values)
+    if not magtif:
+        print('WARNING, using coherence to form cpx')
+        ifg['cpx'].values = magpha2RI_array(ifg.coh.values, ifg.pha.values)
+    else:
+        ifg['cpx'].values = magpha2RI_array(ifg.mag.values, ifg.pha.values)
     return ifg
 
 
