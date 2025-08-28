@@ -736,6 +736,7 @@ def process_ifg_core(ifg, tmpdir = os.getcwd(),
         #    sp = ifg_ml['coh']
         #else:
         #    ifg_ml['gold_coh']=sp
+        ifg_ml['gold_coh'] = ifg_ml['coh'].copy()
         sp=sp.values
         sp[sp > 1] = 1  # should not happen, but just in case...
         sp[sp < 0] = 0
