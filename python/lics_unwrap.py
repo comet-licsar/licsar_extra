@@ -729,7 +729,7 @@ def process_ifg_core(ifg, tmpdir = os.getcwd(),
                 use_gamma = False
         if not use_gamma:
             print('filtering by custom-written goldstein filter (needs optimizing)')
-            ifg_ml['filtpha'], sp = goldstein_filter_xr(ifg_ml.pha, blocklen=16, alpha=0.8, nproc=1, returncoh=(not specmag))
+            ifg_ml['filtpha'], sp = goldstein_filter_xr(ifg_ml.pha, blocklen=16, alpha=0.8, nproc=1, returncoh=False) #(not specmag))
         #if ml == 1:
         #    print('with ML1, we need to use original coherence for masking')
         #    ifg_ml['gold_coh'] = ifg_ml['coh']
