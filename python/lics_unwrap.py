@@ -173,7 +173,7 @@ def cascade_unwrap(frame, pair, downtoml = 1, procdir = os.getcwd(), finalgoldst
     # 06/2023: 
     # 01/2022: updating parameters:
     ifg_mlc = process_ifg(frame, pair, procdir = procpairdir, ml = 10*downtoml, fillby = 'gauss',
-            defomax = 0.3, thres = 0.4, add_resid = False, hgtcorr = hgtcorr, rampit=True, 
+            defomax = 0.3, thres = 0.3, add_resid = False, hgtcorr = hgtcorr, rampit=True,
             dolocal = dolocal, smooth=True, goldstein = False, specmag = False, do_landmask = do_landmask)
     if not only10:
         # do additional 5x and 3x step cascade
@@ -189,7 +189,7 @@ def cascade_unwrap(frame, pair, downtoml = 1, procdir = os.getcwd(), finalgoldst
     ifg_ml = process_ifg(frame, pair, procdir = procpairdir, ml = downtoml, fillby = 'nearest',
                 prev_ramp = ifg_mlc['unw'], thres = thres, defomax = defomax, add_resid = True, 
                 hgtcorr = False, outtif=outtif, subtract_gacos = subtract_gacos, goldstein=finalgoldstein, use_gamma = use_gamma,
-                cliparea_geo = cliparea_geo,  dolocal = dolocal, smooth=smooth, specmag = True, do_landmask = do_landmask)
+                cliparea_geo = cliparea_geo,  dolocal = dolocal, smooth=smooth, specmag = False, do_landmask = do_landmask)
     elapsed_time = time.time()-starttime
     hour = int(elapsed_time/3600)
     minite = int(np.mod((elapsed_time/60),60))
