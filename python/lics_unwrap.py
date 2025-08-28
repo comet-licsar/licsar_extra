@@ -478,7 +478,7 @@ for p in pairs:
 
 
 
-def process_ifg_pair(phatif, cohtif, procpairdir = os.getcwd(), landmask_tif = None,
+def process_ifg_pair(phatif, cohtif, procpairdir = os.getcwd(), landmask_tif = None, magtif = None,
         ml = 10, fillby = 'gauss', thres = 0.2, cascade = False, 
         smooth = False, lowpass = True, goldstein = True, specmag = False, spatialmask_km = 2,
         defomax = 0.6, frame = '', hgtcorr = False, gacoscorr = True, pre_detrend = True,
@@ -526,7 +526,7 @@ def process_ifg_pair(phatif, cohtif, procpairdir = os.getcwd(), landmask_tif = N
         xarray.Dataset: unwrapped multilooked interferogram with additional layers
     """
     try:
-        ifg = load_from_tifs(phatif, cohtif, landmask_tif = landmask_tif) #, cliparea_geo = cliparea_geo) # do not clip here, it will be done later!
+        ifg = load_from_tifs(phatif, cohtif, magtif = magtif, landmask_tif = landmask_tif) #, cliparea_geo = cliparea_geo) # do not clip here, it will be done later!
     except:
         print('error in loading data')
         return False
@@ -596,7 +596,7 @@ def process_ifg_core(ifg, tmpdir = os.getcwd(),
         coh2var = False, add_resid = True,  rampit=False, subtract_gacos = False,
         extweights = None, extweights_mask_threshold = 0.25, keep_coh_debug = True,
         use_gamma = False, keep_coh_px = 0.25,
-        spatialmask_km = 2):
+        spatialmask_km = 2.0):
     """Core ifg unwrapping procedure
     Note: tmpdir should be place for unneeded products (please keep unique per pair)
     """
@@ -730,11 +730,12 @@ def process_ifg_core(ifg, tmpdir = os.getcwd(),
         if not use_gamma:
             print('filtering by custom-written goldstein filter (needs optimizing)')
             ifg_ml['filtpha'], sp = goldstein_filter_xr(ifg_ml.pha, blocklen=16, alpha=0.8, nproc=1, returncoh=(not specmag))
-        if ml == 1:
-            print('with ML1, we need to use original coherence for masking')
-            ifg_ml['gold_coh'] = ifg_ml['coh']
-        else:
-            ifg_ml['gold_coh']=sp
+        #if ml == 1:
+        #    print('with ML1, we need to use original coherence for masking')
+        #    ifg_ml['gold_coh'] = ifg_ml['coh']
+        #    sp = ifg_ml['coh']
+        #else:
+        #    ifg_ml['gold_coh']=sp
         sp=sp.values
         sp[sp > 1] = 1  # should not happen, but just in case...
         sp[sp < 0] = 0
@@ -755,12 +756,16 @@ def process_ifg_core(ifg, tmpdir = os.getcwd(),
         '''
         # this is just to have the masked pixels zeroes...
         ifg_ml['gold_coh']=ifg_ml['gold_coh']*ifg_ml['mask']
-        sp=ifg_ml['gold_coh'].values
+        if specmag:
+            sp=ifg_ml['gold_coh'].values
+        else:
+            sp = ifg_ml['coh'].values
         spmask=sp>thres
         # and remove islands - let's keep the 2x2 km islands...
         npa=spmask*1.0
         npa[npa==0]=np.nan
-        lenthres = 2000  # m
+        # lenthres = 2000  # m
+        lenthres = spatialmask_km * 1000
         mlres = get_resolution(ifg_ml, in_m=True)
         # ok, but we can trust clusters of maxpx pixels (2 km might be overshoot)
         maxpx = 16 * 16
@@ -797,8 +802,9 @@ def process_ifg_core(ifg, tmpdir = os.getcwd(),
                 cpx = pha2cpx(pha2unw)
         #coh = sp  # actually ,let's use the phasediff if we use specmag...
         if not specmag:
-            phadiff=wrap2phase((ifg_ml['filtpha']-ifg_ml['pha']).values)
-            coh = coh_from_phadiff(phadiff, 3)
+            #phadiff=wrap2phase((ifg_ml['filtpha']-ifg_ml['pha']).values)
+            #coh = coh_from_phadiff(phadiff, 3)
+            coh = ifg_ml['coh'].values
             coh[np.isnan(coh)] = 0
         else:
             coh = sp
@@ -1497,6 +1503,10 @@ def process_frame(frame = 'dummy', ml = 10, thres = 0.3,
                     else:
                         phatif=os.path.join(geoifgdir, pair, pair+'.geo.'+ext+'.tif')
                         cohtif=os.path.join(geoifgdir, pair, pair+'.geo.cc.tif')
+                        magtif=os.path.join(geoifgdir, pair, pair+'.geo.mag_cc.tif')
+                        if not os.path.exists(magtif):
+                            magtif = None
+                        #
                         print('debug - local here')
                         prevest = None
                         if use_rg_offs:
@@ -1509,7 +1519,7 @@ def process_frame(frame = 'dummy', ml = 10, thres = 0.3,
                                     outtif = os.path.join(pair, pair + '.geo.rngunw.tif')
                             else:
                                 print('WARNING: range offsets do not exist for pair '+pair)
-                        ifg_ml = process_ifg_pair(phatif, cohtif, procpairdir = os.path.join(procdir,pair), ml = ml, hgtcorr = hgtcorr, fillby = fillby,
+                        ifg_ml = process_ifg_pair(phatif, cohtif, magtif = magtif, procpairdir = os.path.join(procdir,pair), ml = ml, hgtcorr = hgtcorr, fillby = fillby,
                                                  thres = thres, defomax = defomax, add_resid = True, outtif = outtif, extweights = extweights, smooth = smooth,
                                                  lowpass=lowpass, goldstein=goldstein, specmag = specmag, pre_detrend = pre_detrend, landmask_tif = landmask_tif,
                                                  keep_coh_debug = keep_coh_debug, gacoscorr = gacoscorr, cliparea_geo = cliparea_geo,
@@ -1945,7 +1955,7 @@ def load_from_nparrays(inpha,incoh,maskthres = 0.05):
     return ifg
 
 
-def load_from_tifs(phatif, cohtif, landmask_tif = None, cliparea_geo = None):
+def load_from_tifs(phatif, cohtif, magtif = None, landmask_tif = None, cliparea_geo = None):
     inpha = load_tif2xr(phatif)
     incoh = load_tif2xr(cohtif)
     if incoh.max() > 2:
@@ -1963,6 +1973,10 @@ def load_from_tifs(phatif, cohtif, landmask_tif = None, cliparea_geo = None):
     ifg['pha'] = inpha
     ifg['coh'] = ifg['pha']
     ifg['coh'].values = incoh.values
+    if magtif:
+        inmag = load_tif2xr(magtif)
+        ifg['mag'] = ifg['pha']
+        ifg['mag'].values = inmag.values
     ifg['mask'] = ifg['pha']
     ifg['mask'].values = inmask.values
     # just to clean from memory
