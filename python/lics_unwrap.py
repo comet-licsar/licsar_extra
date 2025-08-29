@@ -42,6 +42,15 @@ from sklearn.linear_model import HuberRegressor
 import time
 import matplotlib.pyplot as plt
 import glob
+try:
+    import pyinterp.backends.xarray
+    # Module that handles the filling of undefined values.
+    import pyinterp.fill
+    use_pyinterp = True
+except:
+    print('WARNING, pyinterp not installed - rampit will contain gaps (may not influence your outputs)')
+    use_pyinterp = False
+
 
 # check if there is snaphu
 if os.system('which snaphu >/dev/null 2>/dev/null') != 0:
@@ -171,9 +180,10 @@ def cascade_unwrap(frame, pair, downtoml = 1, procdir = os.getcwd(), finalgoldst
     print('performing cascade unwrapping')
     starttime = time.time()
     # 06/2023: 
-    # 01/2022: updating parameters:
+    # 01/2022: updating parameters: defomax = 0.3, thres = 0.3
+    # 08/2025: updating parameters: defomax = 0, thres = 0.25
     ifg_mlc = process_ifg(frame, pair, procdir = procpairdir, ml = 10*downtoml, fillby = 'gauss',
-            defomax = 0.3, thres = 0.3, add_resid = False, hgtcorr = hgtcorr, rampit=True,
+            defomax = 0, thres = 0.25, add_resid = False, hgtcorr = hgtcorr, rampit=True,
             dolocal = dolocal, smooth=True, goldstein = False, specmag = False, do_landmask = do_landmask)
     if not only10:
         # do additional 5x and 3x step cascade
@@ -186,7 +196,7 @@ def cascade_unwrap(frame, pair, downtoml = 1, procdir = os.getcwd(), finalgoldst
                     smooth = True, thres = 0.2, do_landmask = do_landmask)
             ifg_mlc = ifg_mla.copy(deep=True)
     # now do the final step
-    ifg_ml = process_ifg(frame, pair, procdir = procpairdir, ml = downtoml, fillby = 'nearest',
+    ifg_ml = process_ifg(frame, pair, procdir = procpairdir, ml = downtoml, fillby = 'gauss',   # actually this is often better than using fillby = 'nearest',
                 prev_ramp = ifg_mlc['unw'], thres = thres, defomax = defomax, add_resid = True, 
                 hgtcorr = False, outtif=outtif, subtract_gacos = subtract_gacos, goldstein=finalgoldstein, use_gamma = use_gamma,
                 cliparea_geo = cliparea_geo,  dolocal = dolocal, smooth=smooth, specmag = False, do_landmask = do_landmask)
@@ -768,7 +778,7 @@ def process_ifg_core(ifg, tmpdir = os.getcwd(),
         # lenthres = 2000  # m
         lenthres = spatialmask_km * 1000
         mlres = get_resolution(ifg_ml, in_m=True)
-        # ok, but we can trust clusters of maxpx pixels (2 km might be overshoot)
+        # ok, but we can trust clusters of maxpx pixels..
         maxpx = 16 * 16
         pixels = int(round(lenthres / mlres))
         pixelsno = min(pixels ** 2, maxpx)
@@ -786,21 +796,25 @@ def process_ifg_core(ifg, tmpdir = os.getcwd(),
         # no gapfilling here! but then it gets wrong... so.. gapfilling:
         print('gapfilling')
         tofillpha = ifg_ml.filtpha.where(ifg_ml.mask_full.where(ifg_ml.mask_extent == 1).fillna(1) == 1)
-        if 'lat' not in tofillpha.dims:
-            pha2unw = interpolate_nans(tofillpha.values, method='nearest')   # this takes 2 min 24 s for ml1 -- but will keep it anyway, as rio needs coord sys
-            cpx = pha2cpx(pha2unw)
+        if fillby == 'gauss':
+            pha2unw = gaussfill(tofillpha)
+            cpx = pha2cpx(pha2unw.values)
         else:
-            #pha2unw = interpolate_nans(tofillpha.values, method='nearest')
-            # just some extra prep, for rioxarray (makes things bit faster!):
-            tofillpha = tofillpha.rio.write_nodata(np.nan)
-            tofillpha = tofillpha.rio.set_spatial_dims(x_dim='lon', y_dim='lat')
-            try:
-                pha2unw = tofillpha.rio.interpolate_na(method='nearest')  # this takes 2 min 3 s for ml1 - UPDATED rio: now we can choose value of nan
-                cpx = pha2cpx(pha2unw.values)
-            except:
-                print('error in rio interpolate - maybe no coord sys set? doing the bit longer way')
+            if 'lat' not in tofillpha.dims:
                 pha2unw = interpolate_nans(tofillpha.values, method='nearest')   # this takes 2 min 24 s for ml1 -- but will keep it anyway, as rio needs coord sys
                 cpx = pha2cpx(pha2unw)
+            else:
+                #pha2unw = interpolate_nans(tofillpha.values, method='nearest')
+                # just some extra prep, for rioxarray (makes things bit faster!):
+                tofillpha = tofillpha.rio.write_nodata(np.nan)
+                tofillpha = tofillpha.rio.set_spatial_dims(x_dim='lon', y_dim='lat')
+                try:
+                    pha2unw = tofillpha.rio.interpolate_na(method='nearest')  # this takes 2 min 3 s for ml1 - UPDATED rio: now we can choose value of nan
+                    cpx = pha2cpx(pha2unw.values)
+                except:
+                    print('error in rio interpolate - maybe no coord sys set? doing the bit longer way')
+                    pha2unw = interpolate_nans(tofillpha.values, method='nearest')   # this takes 2 min 24 s for ml1 -- but will keep it anyway, as rio needs coord sys
+                    cpx = pha2cpx(pha2unw)
         #coh = sp  # actually ,let's use the phasediff if we use specmag...
         if not specmag:
             #phadiff=wrap2phase((ifg_ml['filtpha']-ifg_ml['pha']).values)
@@ -815,7 +829,7 @@ def process_ifg_core(ifg, tmpdir = os.getcwd(),
         #print(type(cpx))
         #print(type(coh))
         #print(type(mask))
-        unw,conncomp =unwrap_np(cpx,coh,defomax=0.6,tmpdir=tmpunwdir,mask=mask,conncomp=True, deltemp=True)
+        unw,conncomp =unwrap_np(cpx,coh,defomax=defomax,tmpdir=tmpunwdir,mask=mask,conncomp=True, deltemp=True)
         ifg_ml['unw']=ifg_ml['pha']
         ifg_ml['conncomp'] = ifg_ml['pha']
         ifg_ml['conncomp'].values = conncomp
@@ -1126,10 +1140,16 @@ def process_ifg_core(ifg, tmpdir = os.getcwd(),
     #ifg_ml['unw'] = ifg_ml['unw'] - ifg_ml['unw'].median()
     if rampit:
         ifg_ml['unw_orig'] = ifg_ml['unw'].copy()
-        kernel = Gaussian2DKernel(x_stddev=1.5)
-        ifg_ml['unw'].values= interpolate_replace_nans(ifg_ml['unw'].values, kernel)
-        ifg_ml['unw'].values = filter_nan_gaussian_conserving(ifg_ml['unw'].values, sigma=2, trunc=4)
-        ifg_ml['unw'] = ifg_ml['unw'].fillna(0).where(ifg_ml.mask_extent>0)
+        if use_pyinterp:
+            # much better solution!
+            ifg_ml['unw'] = interpolate_nans_pyinterp(ifg_ml['unw'])
+            ifg_ml['unw'] = ifg_ml['unw'].fillna(0).where(ifg_ml.mask_extent > 0)
+        else:
+            print('interpolating nans with Gaussian kernel, not using pyinterp that is (much) better..')
+            kernel = Gaussian2DKernel(x_stddev=1.5)
+            ifg_ml['unw'].values= interpolate_replace_nans(ifg_ml['unw'].values, kernel)
+            ifg_ml['unw'].values = filter_nan_gaussian_conserving(ifg_ml['unw'].values, sigma=2, trunc=4)
+            ifg_ml['unw'] = ifg_ml['unw'].fillna(0).where(ifg_ml.mask_extent>0)
     #else:
     #    ifg_ml['unw'] = ifg_ml['unw'].where(ifg_ml.mask_full>0)
     # finally clip again, without border pixels:
@@ -1156,8 +1176,9 @@ def process_ifg_core(ifg, tmpdir = os.getcwd(),
         #residpha = residpha - medres
         # ifg_ml['resid_final'].values = residpha; ifg_ml['resid_final'].plot(); plt.show()
         #print('final check for residuals: their std is '+str(np.nanstd(residpha)))
-        # ok, so i assume that the unw would not help anymore, so just adding to unw as it is
+        # ok, so i assume that unwrapping them would not help anymore, so just adding (actually subtracting due to sign convention) to unw as it is
         ifg_ml['unw'] = ifg_ml['unw'] - residpha
+        ifg_ml['unw'] = ifg_ml['unw'].where(ifg_ml.mask_full > 0)
     # now, we may need to save without gacos itself:
     if subtract_gacos:    # so even if we did not use gacos to support unwrapping, we should remove it if subtract_gacos is on. and that's just for loop closures!
         if 'gacos' in ifg_ml:
@@ -2200,9 +2221,6 @@ def gaussfill_nopha(da, sigma=2):
 
 
 def interpolate_nans_pyinterp(xrda):
-    import pyinterp.backends.xarray
-    # Module that handles the filling of undefined values.
-    import pyinterp.fill
     grid = pyinterp.backends.xarray.Grid2D(xrda, geodetic=False) #, increasing_axes=True)
     has_converged, filled = pyinterp.fill.gauss_seidel(grid)
     xrda.values=filled.T
