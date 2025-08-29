@@ -492,7 +492,7 @@ for p in pairs:
 
 def process_ifg_pair(phatif, cohtif, procpairdir = os.getcwd(), landmask_tif = None, magtif = None,
         ml = 10, fillby = 'gauss', thres = 0.2, cascade = False, 
-        smooth = False, lowpass = True, goldstein = True, specmag = False, spatialmask_km = 2,
+        smooth = False, lowpass = True, goldstein = True, specmag = False, spatialmask_km = 2.0,
         defomax = 0.6, frame = '', hgtcorr = False, gacoscorr = True, pre_detrend = True,
         cliparea_geo = None, outtif = None, prevest = None, prev_ramp = None,
         coh2var = False, add_resid = True,  rampit=False, subtract_gacos = False,
@@ -1227,7 +1227,7 @@ def process_frame(frame = 'dummy', ml = 10, thres = 0.3,
             nproc = 1, dolocal = False, specmag = False, defomax = 0.3,
             use_amp_stab = False, use_coh_stab = False, use_amp_coh = False, keep_coh_debug = True,
             freq=5405000000, gacosdir = '../GACOS', do_landmask = True, prefer_unfiltered = True,
-            fillby = 'nearest', use_rg_offs = False):
+            fillby = 'gauss', use_rg_offs = False):
     """Main function to process whole LiCSAR frame (i.e. unwrap all available interferograms within the frame). Works only at JASMIN.
 
     Args:
@@ -1541,7 +1541,10 @@ def process_frame(frame = 'dummy', ml = 10, thres = 0.3,
                                 prefer_unfiltered = prefer_unfiltered, use_rg_offs = use_rg_offs)
                     else:
                         phatif=os.path.join(geoifgdir, pair, pair+'.geo.'+ext+'.tif')
-                        cohtif=os.path.join(geoifgdir, pair, pair+'.geo.cc.tif')
+                        # let's use filt cc if exists...
+                        cohtif = os.path.join(geoifgdir, pair, pair + '.geo.filt.cc.tif')
+                        if not os.path.exists(cohtif):
+                            cohtif=os.path.join(geoifgdir, pair, pair+'.geo.cc.tif')
                         magtif=os.path.join(geoifgdir, pair, pair+'.geo.mag_cc.tif')
                         if not os.path.exists(magtif):
                             magtif = None
