@@ -797,7 +797,10 @@ def process_ifg_core(ifg, tmpdir = os.getcwd(),
         print('gapfilling')
         tofillpha = ifg_ml.filtpha.where(ifg_ml.mask_full.where(ifg_ml.mask_extent == 1).fillna(1) == 1)
         if fillby == 'gauss':
-            pha2unw = gaussfill(tofillpha)
+            if use_pyinterp:
+                pha2unw = interpolate_nans_pyinterp_phase(tofillpha)
+            else:
+                pha2unw = gaussfill(tofillpha)
             cpx = pha2cpx(pha2unw.values)
         else:
             if 'lat' not in tofillpha.dims:
@@ -829,23 +832,27 @@ def process_ifg_core(ifg, tmpdir = os.getcwd(),
         #print(type(cpx))
         #print(type(coh))
         #print(type(mask))
-        unw,conncomp =unwrap_np(cpx,coh,defomax=defomax,tmpdir=tmpunwdir,mask=mask,conncomp=True, deltemp=True)
+        print('2025/08: avoiding use of mask in snaphu - results in real bad estimates..')
+        #unw,conncomp =unwrap_np(cpx,coh,defomax=defomax,tmpdir=tmpunwdir,mask=mask,conncomp=True, deltemp=True)
+        unw, conncomp = unwrap_np(cpx, coh, defomax=defomax, tmpdir=tmpunwdir, conncomp=True, deltemp=True)
         ifg_ml['unw']=ifg_ml['pha']
         ifg_ml['conncomp'] = ifg_ml['pha']
         ifg_ml['conncomp'].values = conncomp
         ifg_ml.unw.values=unw
-        ifg_ml['pha']=ifg_ml['filtpha']
-        # add residuals, using orig coh
-        print('unwrapping residuals')
-        cpx=pha2cpx(wrap2phase((ifg_ml['filtpha']-ifg_ml['origpha']).fillna(0).values)) # fillna probably not needed
-        coh=ifg_ml.coh.fillna(0.001).values
-        unw=unwrap_np(cpx,coh,defomax=0,tmpdir=tmpunwdir,mask=mask,deltemp=True)
-        unw = unw * ifg_ml.mask_full.values
-        unw[unw == 0] = np.nan
-        # 2022-07-28: seems not good idea to correct by median...
-        #nanmed = np.nanmedian(unw)
-        #unw = unw - nanmed
-        ifg_ml.unw.values=ifg_ml.unw.values+unw
+        #ifg_ml['pha']=ifg_ml['filtpha']
+        if not rampit:  # we want to unwrap/add the resids ALWAYS.. unless this is cascade.
+            # add residuals, using orig coh
+            print('unwrapping residuals')
+            cpx=pha2cpx(wrap2phase((ifg_ml['filtpha']-ifg_ml['origpha']).fillna(0).values)) # fillna probably not needed
+            coh=ifg_ml.coh.fillna(0.001).values
+            # unw=unwrap_np(cpx,coh,defomax=0,tmpdir=tmpunwdir,mask=mask,deltemp=True)
+            unw = unwrap_np(cpx, coh, defomax=0, tmpdir=tmpunwdir, deltemp=True)
+            unw = unw * ifg_ml.mask_full.values
+            unw[unw == 0] = np.nan
+            # 2022-07-28: seems not good idea to correct by median...
+            #nanmed = np.nanmedian(unw)
+            #unw = unw - nanmed
+            ifg_ml.unw.values=ifg_ml.unw.values+unw
         ifg_ml['unw'] = ifg_ml['unw'] * ifg_ml['mask_full']
         # so now we have it all done - let's return origpha from pre-filt state
         ifg_ml['pha']=ifg_ml['origpha']
@@ -2218,6 +2225,16 @@ def gaussfill_nopha(da, sigma=2):
         else:
             da.values = interpolate_replace_nans(da.values, kernel)
     return da
+
+
+def interpolate_nans_pyinterp_phase(xrda):
+    tofill = pha2cpx(xrda)
+    tofillR = np.real(tofill)
+    tofillI = np.imag(tofill)
+    filledR = interpolate_nans_pyinterp(tofillR)
+    filledI = interpolate_nans_pyinterp(tofillI)
+    xrda.values = np.angle(filledR.values + 1j * filledI.values)
+    return xrda
 
 
 def interpolate_nans_pyinterp(xrda):
