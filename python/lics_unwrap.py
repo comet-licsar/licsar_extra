@@ -181,9 +181,11 @@ def cascade_unwrap(frame, pair, downtoml = 1, procdir = os.getcwd(), finalgoldst
     starttime = time.time()
     # 06/2023: 
     # 01/2022: updating parameters: defomax = 0.3, thres = 0.3
-    # 08/2025: updating parameters: defomax = 0, thres = 0.25
+    # 08/2025: updating parameters: defomax = 0, thres = 0.3
+    if downtoml>1:
+        print('WARNING, this will do first cascade in 10x the final factor - recommended value is downtoml=1')
     ifg_mlc = process_ifg(frame, pair, procdir = procpairdir, ml = 10*downtoml, fillby = 'gauss',
-            defomax = 0, thres = 0.25, add_resid = False, hgtcorr = hgtcorr, rampit=True,
+            defomax = 0, thres = 0.3, add_resid = False, hgtcorr = hgtcorr, rampit=True,
             dolocal = dolocal, smooth=True, goldstein = False, specmag = False, do_landmask = do_landmask)
     if not only10:
         # do additional 5x and 3x step cascade
@@ -578,11 +580,15 @@ def process_ifg_pair(phatif, cohtif, procpairdir = os.getcwd(), landmask_tif = N
             tmpdir = tmpdir, use_gamma = use_gamma, spatialmask_km = spatialmask_km)
     else:
         print('performing 1 step cascade')
-        ml10=10*ml
+        if ml < 5:
+            ml10 = 10
+        else:
+            ml10 = 20
+        # ml10=10*ml
         ifg_ml10 = process_ifg_core(ifg, 
-            ml = ml10, fillby = fillby, thres = 0.35, smooth = True, lowpass = lowpass,
-            goldstein = False, specmag = specmag,
-            defomax = defomax, hgtcorr = hgtcorr, gacoscorr = gacoscorr, pre_detrend = pre_detrend,
+            ml = ml10, fillby = fillby, thres = 0.3, smooth = True, lowpass = lowpass,
+            goldstein = False, specmag = False,
+            defomax = 0, hgtcorr = hgtcorr, gacoscorr = gacoscorr, pre_detrend = pre_detrend,
             cliparea_geo = cliparea_geo, outtif = None, prevest = prevest, prev_ramp = prev_ramp,
             coh2var = coh2var, add_resid = False,  rampit=True, subtract_gacos = False,
             extweights = extweights, keep_coh_debug = keep_coh_debug, keep_coh_px = keep_coh_px,
