@@ -845,6 +845,8 @@ def process_ifg_core(ifg, tmpdir = os.getcwd(),
             else:
                 # that part takes ages and it is not that big improvement..
                 calc_coh_from_delta = False
+            # testing - let's just skip this attempt...
+            calc_coh_from_delta = False
             # calculate gauss_coh, as a measure of spatial consistence
             # ok, but let's have the radius of Gaussian kernel tightier - just 10x10 pixels, i.e.
             radius = 5*get_resolution(ifg_ml)
