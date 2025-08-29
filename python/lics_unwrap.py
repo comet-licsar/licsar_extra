@@ -854,7 +854,9 @@ def process_ifg_core(ifg, tmpdir = os.getcwd(),
             ifg_ml['consistence'] = ifg_ml['gauss_coh'].copy()
         else:
             ifg_ml['consistence'] = ifg_ml['coh']
-        mask_gauss = (ifg_ml.consistence > thres)*1
+        # mask_gauss = (ifg_ml.consistence > thres)*1
+        # but the consistence is still not desirable noise measure... reverting to the coherence estimate - also not perfect - TODO ....
+        mask_gauss = (ifg_ml.coh > thres) * 1
         if keep_coh_px:
             #return (unmask) pixels that have coh > keep_coh_px (default=0.25)
             mask_gauss.values[mask_gauss.values == 0] = 1*(ifg_ml.coh > keep_coh_px).values[mask_gauss.values == 0]
