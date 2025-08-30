@@ -13,3 +13,4 @@ astropy
 scikit-learn
 gdal>=2.4
 numpy<2.0
+pyinterp
