@@ -27,7 +27,7 @@ def grep1line(arg,filename):
         res = res.split('\n')[0]
     return res
 
-def loadall2cube(cumfile, extracols=['loop_ph_avg_abs']):
+def loadall2cube(cumfile, column='cum', extracols=['loop_ph_avg_abs']):
     cumdir = os.path.dirname(cumfile)
     cohfile = os.path.join(cumdir,'results/coh_avg')
     rmsfile = os.path.join(cumdir,'results/resid_rms')
@@ -37,29 +37,34 @@ def loadall2cube(cumfile, extracols=['loop_ph_avg_abs']):
     metafile = os.path.join(cumdir,'../../metadata.txt')
     #h5datafile = 'cum.h5'
     cum = xr.load_dataset(cumfile)
-    
+
+    # --- NEW: validate that the requested column exists ---
+    if column not in cum.data_vars:
+        raise ValueError(
+            f"Requested column '{column}' not found in dataset. "
+            f"Available data variables: {list(cum.data_vars)}"
+        )
+
     sizex = len(cum.vel[0])
     sizey = len(cum.vel)
-    
-    lon = cum.corner_lon.values+cum.post_lon.values*np.arange(sizex)-0.5*float(cum.post_lon)
-    lat = cum.corner_lat.values+cum.post_lat.values*np.arange(sizey)+0.5*float(cum.post_lat)  # maybe needed? yes! for gridline/AREA that is default in rasterio...
-    
-    time = np.array(([dt.datetime.strptime(str(imd), '%Y%m%d') for imd in cum.imdates.values]))
-    
-    velxr = xr.DataArray(cum.vel.values.reshape(sizey,sizex), coords=[lat, lon], dims=["lat", "lon"])
-    #LiCSBAS uses 0 instead of nans...
-    velxr = velxr.where(velxr!=0)
+
+    lon = cum.corner_lon.values + cum.post_lon.values * np.arange(sizex) - 0.5 * float(cum.post_lon)
+    lat = cum.corner_lat.values + cum.post_lat.values * np.arange(sizey) + 0.5 * float(cum.post_lat)
+
+    time = np.array([dt.datetime.strptime(str(imd), '%Y%m%d') for imd in cum.imdates.values])
+
+    velxr = xr.DataArray(cum.vel.values.reshape(sizey, sizex), coords=[lat, lon], dims=["lat", "lon"])
+    velxr = velxr.where(velxr != 0)
     velxr.attrs['unit'] = 'mm/year'
-    #vinterceptxr = xr.DataArray(cum.vintercept.values.reshape(sizey,sizex), coords=[lat, lon], dims=["lat", "lon"])
-    
-    cumxr = xr.DataArray(cum.cum.values, coords=[time, lat, lon], dims=["time","lat", "lon"])
+
+    # --- CHANGED: use the selected variable name ---
+    cumxr = xr.DataArray(cum[column].values, coords=[time, lat, lon], dims=["time", "lat", "lon"])
     cumxr.attrs['unit'] = 'mm'
-    #bperpxr = xr.DataArray(cum.bperp.values, coords=[time], dims=["time"])
-    
+
     cube = xr.Dataset()
-    cube['cum'] = cumxr
+    cube[column] = cumxr     # keep the chosen name in the output
     cube['vel'] = velxr
-    #cube['vintercept'] = vinterceptxr
+
     try:
         cube['bperp'] = xr.DataArray(cum.bperp.values, coords=[time], dims=["time"])
         cube['bperp'] = cube.bperp.where(cube.bperp!=0)
@@ -103,6 +108,7 @@ def loadall2cube(cumfile, extracols=['loop_ph_avg_abs']):
                 print('No '+e+' file detected, skipping')
     except:
         print('debug - extra layers not included')
+
     if os.path.exists(vstdfile):
         infile = np.fromfile(vstdfile, 'float32')
         vstdxr = xr.DataArray(infile.reshape(sizey,sizex), coords=[lat, lon], dims=["lat", "lon"])
@@ -138,6 +144,7 @@ def loadall2cube(cumfile, extracols=['loop_ph_avg_abs']):
     cube.rio.write_crs("EPSG:4326", inplace=True)
     #cube = cube.sortby(['time','lon','lat']) # 2025/03: not really right as lat should be opposite-signed..
     return cube
+
 
 
 def licsbas_tsdir_remove_gacos(tsgacosdir):
