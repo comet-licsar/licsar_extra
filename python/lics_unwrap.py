@@ -3237,7 +3237,7 @@ def export_xr2tif(xrda, tif, lonlat = True, debug = True, dogdal = True, refto =
         if set_to_pixel_registration:
             cmd = 'gdal_edit.py -mo AREA_OR_POINT=Point '+tif
             runcmd(cmd, printcmd=False)
-        cmd = 'mv {0} {1}; gdal_translate -of GTiff -co COMPRESS=DEFLATE -co PREDICTOR=3 {1} {0}'.format(tif, tif+'tmp.tif') # will compress better
+        cmd = 'mv {0} {1} 2>/dev/null; gdal_translate -of GTiff -co COMPRESS=DEFLATE -co PREDICTOR=3 {1} {0}'.format(tif, tif+'tmp.tif') # will compress better
         runcmd(cmd, printcmd = False)
         if os.path.exists(tif+'tmp.tif'):
             os.remove(tif+'tmp.tif')
