@@ -401,7 +401,7 @@ def df2nc(df, outncfile=None, resol=0.0025, extracols=[], compressnc=True):
     See help of csv2nc for proper formatting.
     Grid would aggregate values in each cell by their median.
     """
-    to_bin = lambda x: np.round(np.floor(x / resol) * resol + resol/2) # +resol/2 means shifting towards cell centre (hope correct?)
+    to_bin = lambda x: np.floor(x / resol) * resol + resol/2 # +resol/2 means shifting towards cell centre (hope correct?)
     df["lat"] = to_bin(df['LAT'])
     df["lon"] = to_bin(df['LON'])
     groups = df.groupby(["lat", "lon"])
@@ -437,7 +437,7 @@ def df2nc(df, outncfile=None, resol=0.0025, extracols=[], compressnc=True):
     y_reg = np.arange(y_min, y_max + resol, resol)
     if nc.lat[1]<nc.lat[0]:
         y_reg = y_reg[::-1]
-    nc = nc.reindex(lon=x_reg, lat=y_reg, method=None)
+    nc = nc.reindex(lon=x_reg, lat=y_reg, method='nearest') # method=None did not work well (but why??!!)
     # now add CRS:
     nc.attrs['crs'] = 'EPSG:4326'  # Optional global attribute
     #
