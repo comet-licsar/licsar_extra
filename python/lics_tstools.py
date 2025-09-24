@@ -644,7 +644,7 @@ def generate_pmm_velocity(frame, plate = 'Eurasia', geocdir = None, outif = None
     return vlos_plate
 
 # STAMPS-related operations:
-def csv2nc(csv, outncfile = None, resol = 0.0025, extracols = []):
+def csv2nc(csv, outncfile = None, resol = 0.0025, extracols = [], compressnc=True):
     """ Converts a csv file into netcdf.
     The CSV must have following columns (order does not matter, but keep the upper case):
     LAT,LON,VEL,COHER,*dates*
@@ -664,8 +664,15 @@ def csv2nc(csv, outncfile = None, resol = 0.0025, extracols = []):
     """
     df = pd.read_csv(csv)
     print('converting to the netcdf file')
-    nc = df2nc(df, outncfile = outncfile, resol = resol, extracols = extracols)
+    nc = df2nc(df, outncfile = outncfile, resol = resol, extracols = extracols, compressnc=compressnc)
     return nc
+
+
+def deg2m(val, m2deg=False):
+    if m2deg:
+        return val/111111
+    else:
+        return val*111111
 
 
 def df2nc(df, outncfile=None, resol=0.0025, extracols=[], compressnc=True):
@@ -673,7 +680,7 @@ def df2nc(df, outncfile=None, resol=0.0025, extracols=[], compressnc=True):
     See help of csv2nc for proper formatting.
     Grid would aggregate values in each cell by their median.
     """
-    to_bin = lambda x: np.floor(x / resol) * resol
+    to_bin = lambda x: np.floor(x / resol) * resol + resol/2 # +resol/2 means shifting towards cell centre (hope correct?)
     df["lat"] = to_bin(df['LAT'])
     df["lon"] = to_bin(df['LON'])
     groups = df.groupby(["lat", "lon"])
@@ -701,6 +708,32 @@ def df2nc(df, outncfile=None, resol=0.0025, extracols=[], compressnc=True):
     #
     nc = nc.assign_coords({'time': a.time.values})
     nc['cum'] = a
+    # but values can be missing! so...:
+    x_min, x_max = float(nc.lon.min()), float(nc.lon.max())
+    y_min, y_max = float(nc.lat.min()), float(nc.lat.max())
+    #
+    x_reg = np.arange(x_min, x_max + resol, resol)
+    y_reg = np.arange(y_min, y_max + resol, resol)
+    if nc.lat[1]<nc.lat[0]:
+        y_reg = y_reg[::-1]
+    nc = nc.reindex(lon=x_reg, lat=y_reg, method='nearest') # method=None did not work well (but why??!!)
+    # now add CRS:
+    nc.attrs['crs'] = 'EPSG:4326'  # Optional global attribute
+    #
+    # Add a variable to define the CRS following CF conventions
+    nc['crs'] = xr.DataArray(0, attrs={
+        'grid_mapping_name': 'latitude_longitude',
+        'epsg_code': '4326',
+        'semi_major_axis': 6378137.0,
+        'inverse_flattening': 298.257223563,
+        'longitude_of_prime_meridian': 0.0,
+        'units': 'degrees'
+    })
+    #
+    # Link the CRS to your data variable(s)
+    for varn in ['vel', 'coh', 'cum']+extracols:
+        nc[varn].attrs['grid_mapping'] = 'crs'
+    #
     if compressnc:
         # compress it and store as netcdf
         encode = {'vel': {'zlib': True, 'complevel': 9},
@@ -708,6 +741,8 @@ def df2nc(df, outncfile=None, resol=0.0025, extracols=[], compressnc=True):
                   'cum': {'zlib': True, 'complevel': 9},
                   'time': {'dtype': 'i4'}
                   }
+        for extracol in extracols:
+            encode.update({extracol: {'zlib': True, 'complevel': 9}})
         if outncfile:
             nc.to_netcdf(outncfile, encoding=encode)
     else:
@@ -715,8 +750,49 @@ def df2nc(df, outncfile=None, resol=0.0025, extracols=[], compressnc=True):
             nc.to_netcdf(outncfile)
     return nc
 
+
+''' # the exaggeration did not work, so postponing:
+def exaggerate_amplitude(rslcfile):
+    # check if scomplex or what
+    import LiCSAR_iofunc as LICSARio
+    dtype1 = LICSARio.dtype_slc_gamma_par(rslcfile)
+    if (dtype1 == 'SCOMPLEX'):
+        cpxSLC = LICSARio.read_fast_slc_gamma_scomplex(rslcfile)
+        # no need to byteswap!!???
+    else:
+        cpxSLC = LICSARio.read_fast_slc_gamma_fcomplex(rslcfile)
+        cpxSLC = cpxSLC.byteswap()
+    mag = np.abs(cpxSLC)**2 # exaggerate
+    pha = np.angle(cpxSLC)
+    R = np.cos(pha) * mag
+    I = np.sin(pha) * mag
+    mag, pha = None, None
+    out = R + 1j * I
+    if (dtype1 == 'SCOMPLEX'):
+        # out
+        LICSARio.write_fast_slc_gamma_scomplex(out, rslcfile)
+    else:
+        LICSARio.write_fast_slc_gamma_fcomplex(out, rslcfile)
+
+
+def exaggerate_amplitude_rslcdir(rslcdir = 'RSLC'):
+    if not os.path.exists(rslcdir):
+        print('The directory '+rslcdir+' does not exist')
+        return False
+    for epoch in os.listdir(rslcdir):
+        epochrslc = os.path.join(rslcdir, epoch, epoch+'.rslc')
+        epochrslcbackup = os.path.join(rslcdir, epoch, epoch + '.rslc.orig')
+        if os.path.exists(epochrslc):
+            print(epoch)
+            if not os.path.exists(epochrslcbackup):
+                cmd = 'cp '+epochrslc+' '+epochrslcbackup
+                os.system(cmd)
+                exaggerate_amplitude(epochrslc)
+            else:
+                print('ERROR: the backup RSLC exists - probably already done, continuing')
 '''
-# have the nc loaded...
+
+'''
 # STEP 2 - convert STAMPS PS outputs to nc:
 klstep = 0
 if klstep == 2:
@@ -752,7 +828,6 @@ if klstep == 2:
 ## STEP 3: decompose (need LA!)
 # for x in *v2.nc; do a=`echo $x | cut -d '.' -f1`; frnc=`ls $a/*.nc | cut -d '/' -f2`; mv $x $frnc; done
 framesnc=['022D_03989_131313.nc','044A_03932_131313.nc','095D_03993_131313.nc','146A_04048_131313.nc']
-framesnc=['022D_03989_131313.nc','095D_03993_131313.nc','146A_04048_131313.nc']
 
 decompose_np_multi(input_data, beta = 0, do_velUN=False)
 

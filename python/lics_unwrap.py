@@ -24,6 +24,7 @@ import re
 import xarray as xr
 xr.set_options(keep_attrs=True)
 import rioxarray
+from affine import Affine
 from osgeo import gdal
 
 import numpy as np
@@ -3210,6 +3211,8 @@ def export_xr2tif(xrda, tif, lonlat = True, debug = True, dogdal = True, refto =
     import rioxarray
     #coordsys = xrda.crs.split('=')[1]
     coordsys = "epsg:4326"
+    if set_to_pixel_registration:
+        dogdal = True # pixel reg works correctly only through GDAL!
     if debug:
         xrda = xrda.astype(np.float32)
         # reset original spatial_ref
@@ -3218,14 +3221,26 @@ def export_xr2tif(xrda, tif, lonlat = True, debug = True, dogdal = True, refto =
         # remove attributes
         xrda.attrs = {}
     if lonlat:
-        if xrda.lat[1] > xrda.lat[0]:
-            xrda = xrda.sortby('lat',ascending=False)
-        xrda = xrda.rio.set_spatial_dims(x_dim="lon", y_dim="lat", inplace=True)
-    else:
-        if xrda.y[1] > xrda.y[0]:
-            xrda = xrda.sortby('y',ascending=False)
-        xrda = xrda.rio.set_spatial_dims(x_dim="x", y_dim="y", inplace=True)
+        xrda = xrda.rename({'lon': 'x', 'lat': 'y'})
+        # xrda = xrda.transpose('y', 'x')
+    if xrda.y[1] > xrda.y[0]:
+        xrda = xrda.sortby('y',ascending=False)
+    xrda = xrda.rio.set_spatial_dims(x_dim="x", y_dim="y", inplace=True)
+    #
+    # Get pixel size
+    dx = float(xrda['x'][1] - xrda['x'][0])
+    dy = float(xrda['y'][0] - xrda['y'][1])
+    # Get origin (top-left corner)
+    x0 = xrda['x'][0].item() - dx / 2
+    y0 = xrda['y'][0].item() - dy / 2
+    # Build affine transform
+    transform = Affine(dx, 0.0, x0, 0.0, -dy, y0)  # Note: dy is negative for north-up
+    # Apply transform
+    xrda.rio.write_transform(transform, inplace=True)
+    #
     xrda = xrda.rio.write_crs(coordsys, inplace=True)
+    if 'grid_mapping' in xrda.attrs:
+        xrda.attrs.pop('grid_mapping', None)
     if dogdal:
         xrda.rio.to_raster(tif+'tmp.tif')
         if refto:
