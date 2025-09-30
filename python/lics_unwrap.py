@@ -1546,6 +1546,9 @@ def process_frame(frame = 'dummy', ml = 10, thres = 0.3,
                         cohtif = os.path.join(geoifgdir, pair, pair + '.geo.filt.cc.tif')
                         if not os.path.exists(cohtif):
                             cohtif=os.path.join(geoifgdir, pair, pair+'.geo.cc.tif')
+                        else:
+                            thres=0.45
+                            print('filt.cc file found - using it for masking (setting thres to '+str(thres)+')')
                         magtif=os.path.join(geoifgdir, pair, pair+'.geo.mag_cc.tif')
                         if not os.path.exists(magtif):
                             magtif = None
@@ -2625,6 +2628,7 @@ def remove_islands(npa, pixelsno = 50):
         np.array: array after removing islands
     """
     #check the mask - should be 1 for islands and 0 for nans
+    print('removing clusters of size below '+str(pixelno)+' pixels.')
     mask = ~np.isnan(npa)
     islands, ncomp = ndimage.label(mask)
     for i in range(ncomp):
