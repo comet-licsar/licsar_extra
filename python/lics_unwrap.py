@@ -24,6 +24,7 @@ import re
 import xarray as xr
 xr.set_options(keep_attrs=True)
 import rioxarray
+from affine import Affine
 from osgeo import gdal
 
 import numpy as np
@@ -1542,9 +1543,12 @@ def process_frame(frame = 'dummy', ml = 10, thres = 0.3,
                     else:
                         phatif=os.path.join(geoifgdir, pair, pair+'.geo.'+ext+'.tif')
                         # let's use filt cc if exists...
-                        cohtif = os.path.join(geoifgdir, pair, pair + '.geo.filt.cc.tif')
-                        if not os.path.exists(cohtif):
-                            cohtif=os.path.join(geoifgdir, pair, pair+'.geo.cc.tif')
+                        #cohtif = os.path.join(geoifgdir, pair, pair + '.geo.filt.cc.tif')
+                        #if not os.path.exists(cohtif):
+                        cohtif=os.path.join(geoifgdir, pair, pair+'.geo.cc.tif')
+                        #else:
+                        #    thres=0.45
+                        #    print('filt.cc file found - using it for masking (setting thres to '+str(thres)+')')
                         magtif=os.path.join(geoifgdir, pair, pair+'.geo.mag_cc.tif')
                         if not os.path.exists(magtif):
                             magtif = None
@@ -1997,7 +2001,7 @@ def load_from_nparrays(inpha,incoh,maskthres = 0.05):
     return ifg
 
 
-def load_from_tifs(phatif, cohtif, magtif = None, landmask_tif = None, cliparea_geo = None):
+def load_from_tifs(phatif, cohtif, magtif = None, landmask_tif = None, cliparea_geo = None, checkfiltcoh=True):
     inpha = load_tif2xr(phatif)
     incoh = load_tif2xr(cohtif)
     if incoh.max() > 2:
@@ -2011,6 +2015,16 @@ def load_from_tifs(phatif, cohtif, magtif = None, landmask_tif = None, cliparea_
         if os.path.exists(landmask_tif):
             landmask = load_tif2xr(landmask_tif)
             inmask.values = landmask.values * inmask.values
+    if checkfiltcoh:
+        filtcoh = cohtif.replace('geo.cc.tif', 'geo.filt.cc.tif')
+        if os.path.exists(filtcoh):
+            filtcoh = load_tif2xr(filtcoh)
+            filtcoh_thres=0.45
+            print('filt.cc file found - using it for masking (using thres of ' + str(filtcoh_thres) + ')')
+            if filtcoh.max() > 2:
+                filtcoh.values = filtcoh.values/255
+            fcmask=(filtcoh>filtcoh_thres)*1
+            inmask.values = fcmask.values * inmask.values
     ifg = xr.Dataset()
     ifg['pha'] = inpha
     ifg['coh'] = ifg['pha']
@@ -2624,6 +2638,7 @@ def remove_islands(npa, pixelsno = 50):
         np.array: array after removing islands
     """
     #check the mask - should be 1 for islands and 0 for nans
+    print('removing clusters of size below '+str(pixelno)+' pixels.')
     mask = ~np.isnan(npa)
     islands, ncomp = ndimage.label(mask)
     for i in range(ncomp):
@@ -3210,6 +3225,8 @@ def export_xr2tif(xrda, tif, lonlat = True, debug = True, dogdal = True, refto =
     import rioxarray
     #coordsys = xrda.crs.split('=')[1]
     coordsys = "epsg:4326"
+    if set_to_pixel_registration:
+        dogdal = True # pixel reg works correctly only through GDAL!
     if debug:
         xrda = xrda.astype(np.float32)
         # reset original spatial_ref
@@ -3218,14 +3235,26 @@ def export_xr2tif(xrda, tif, lonlat = True, debug = True, dogdal = True, refto =
         # remove attributes
         xrda.attrs = {}
     if lonlat:
-        if xrda.lat[1] > xrda.lat[0]:
-            xrda = xrda.sortby('lat',ascending=False)
-        xrda = xrda.rio.set_spatial_dims(x_dim="lon", y_dim="lat", inplace=True)
-    else:
-        if xrda.y[1] > xrda.y[0]:
-            xrda = xrda.sortby('y',ascending=False)
-        xrda = xrda.rio.set_spatial_dims(x_dim="x", y_dim="y", inplace=True)
+        xrda = xrda.rename({'lon': 'x', 'lat': 'y'})
+        # xrda = xrda.transpose('y', 'x')
+    if xrda.y[1] > xrda.y[0]:
+        xrda = xrda.sortby('y',ascending=False)
+    xrda = xrda.rio.set_spatial_dims(x_dim="x", y_dim="y", inplace=True)
+    #
+    # Get pixel size
+    dx = float(xrda['x'][1] - xrda['x'][0])
+    dy = float(xrda['y'][0] - xrda['y'][1])
+    # Get origin (top-left corner)
+    x0 = xrda['x'][0].item() - dx / 2
+    y0 = xrda['y'][0].item() - dy / 2
+    # Build affine transform
+    transform = Affine(dx, 0.0, x0, 0.0, -dy, y0)  # Note: dy is negative for north-up
+    # Apply transform
+    xrda.rio.write_transform(transform, inplace=True)
+    #
     xrda = xrda.rio.write_crs(coordsys, inplace=True)
+    if 'grid_mapping' in xrda.attrs:
+        xrda.attrs.pop('grid_mapping', None)
     if dogdal:
         xrda.rio.to_raster(tif+'tmp.tif')
         if refto:
@@ -3237,7 +3266,7 @@ def export_xr2tif(xrda, tif, lonlat = True, debug = True, dogdal = True, refto =
         if set_to_pixel_registration:
             cmd = 'gdal_edit.py -mo AREA_OR_POINT=Point '+tif
             runcmd(cmd, printcmd=False)
-        cmd = 'mv {0} {1}; gdal_translate -of GTiff -co COMPRESS=DEFLATE -co PREDICTOR=3 {1} {0}'.format(tif, tif+'tmp.tif') # will compress better
+        cmd = 'mv {0} {1} 2>/dev/null; gdal_translate -of GTiff -co COMPRESS=DEFLATE -co PREDICTOR=3 {1} {0}'.format(tif, tif+'tmp.tif') # will compress better
         runcmd(cmd, printcmd = False)
         if os.path.exists(tif+'tmp.tif'):
             os.remove(tif+'tmp.tif')

@@ -644,7 +644,219 @@ def generate_pmm_velocity(frame, plate = 'Eurasia', geocdir = None, outif = None
         export_xr2tif(vlos_plate, outif, dogdal = False)
     return vlos_plate
 
+# STAMPS-related operations:
+def csv2nc(csv, outncfile = None, resol = 0.0025, extracols = [], compressnc=True):
+    """ Converts a csv file into netcdf.
+    The CSV must have following columns (order does not matter, but keep the upper case):
+    LAT,LON,VEL,COHER,*dates*
+    where *dates* are column names in format of yyyy-mm-dd.
 
+    Usage example:
+        nc = csv2nc('test.csv', 'test.nc')
+        nc.vel.plot(); plt.show()
+
+    Args:
+        csv (string): path to the csv
+        outncfile (string): path to the output netcdf file (or None to only return the object)
+        resol (float): output resolution cell size in degrees (WGS-84)
+        extracols (list): list of column names to be also exported (apart from VEL,COHER and dates)
+    Returns:
+        xr.DataArray
+    """
+    df = pd.read_csv(csv)
+    print('converting to the netcdf file')
+    nc = df2nc(df, outncfile = outncfile, resol = resol, extracols = extracols, compressnc=compressnc)
+    return nc
+
+
+def deg2m(val, m2deg=False):
+    if m2deg:
+        return val/111111
+    else:
+        return val*111111
+
+
+def df2nc(df, outncfile=None, resol=0.0025, extracols=[], compressnc=True):
+    """ Converts pandas dataframe (loaded csv file) to NetCDF.
+    See help of csv2nc for proper formatting.
+    Grid would aggregate values in each cell by their median.
+    """
+    to_bin = lambda x: np.floor(x / resol) * resol + resol/2 # +resol/2 means shifting towards cell centre (hope correct?)
+    df["lat"] = to_bin(df['LAT'])
+    df["lon"] = to_bin(df['LON'])
+    groups = df.groupby(["lat", "lon"])
+    medgrid = groups.median()  # .agg(np.nanmedian)
+    #
+    #lat = medgrid.index.get_level_values(level=0)
+    #lon = medgrid.index.get_level_values(level=1)
+    dates = df.columns[df.columns.str.match(r"\d{4}-\d{2}-\d{2}")].to_list()
+    #
+    # cols = ['VEL_U', 'COHER'] #, 'SIGMA VEL_U']
+    cols = ['VEL', 'COHER']
+    cols = cols + extracols
+    nc = medgrid[cols].to_xarray()
+    # velcol = 'vel'
+    nc = nc.rename({'VEL': 'vel', 'COHER': 'coh'})
+    #
+    # now convert from dates
+    datum = dates[0]
+    a = medgrid[datum].to_xarray().assign_coords(
+        {'time': dt.datetime.strptime(datum, '%Y-%m-%d')}).expand_dims('time').rename('cum')
+    for datum in dates[1:]:
+        b = medgrid[datum].to_xarray().assign_coords(
+            {'time': dt.datetime.strptime(datum, '%Y-%m-%d')}).expand_dims('time').rename('cum')
+        a = xr.concat([a, b], dim='time')
+    #
+    nc = nc.assign_coords({'time': a.time.values})
+    nc['cum'] = a
+    # but values can be missing! so...:
+    x_min, x_max = float(nc.lon.min()), float(nc.lon.max())
+    y_min, y_max = float(nc.lat.min()), float(nc.lat.max())
+    #
+    x_reg = np.arange(x_min, x_max + resol, resol)
+    y_reg = np.arange(y_min, y_max + resol, resol)
+    if nc.lat[1]<nc.lat[0]:
+        y_reg = y_reg[::-1]
+    nc = nc.reindex(lon=x_reg, lat=y_reg, method='nearest') # method=None did not work well (but why??!!)
+    # now add CRS:
+    nc.attrs['crs'] = 'EPSG:4326'  # Optional global attribute
+    #
+    # Add a variable to define the CRS following CF conventions
+    nc['crs'] = xr.DataArray(0, attrs={
+        'grid_mapping_name': 'latitude_longitude',
+        'epsg_code': '4326',
+        'semi_major_axis': 6378137.0,
+        'inverse_flattening': 298.257223563,
+        'longitude_of_prime_meridian': 0.0,
+        'units': 'degrees'
+    })
+    #
+    # Link the CRS to your data variable(s)
+    for varn in ['vel', 'coh', 'cum']+extracols:
+        nc[varn].attrs['grid_mapping'] = 'crs'
+    #
+    if compressnc:
+        # compress it and store as netcdf
+        encode = {'vel': {'zlib': True, 'complevel': 9},
+                  'coh': {'zlib': True, 'complevel': 9},
+                  'cum': {'zlib': True, 'complevel': 9},
+                  'time': {'dtype': 'i4'}
+                  }
+        for extracol in extracols:
+            encode.update({extracol: {'zlib': True, 'complevel': 9}})
+        if outncfile:
+            nc.to_netcdf(outncfile, encoding=encode)
+    else:
+        if outncfile:
+            nc.to_netcdf(outncfile)
+    return nc
+
+
+''' # the exaggeration did not work, so postponing:
+def exaggerate_amplitude(rslcfile):
+    # check if scomplex or what
+    import LiCSAR_iofunc as LICSARio
+    dtype1 = LICSARio.dtype_slc_gamma_par(rslcfile)
+    if (dtype1 == 'SCOMPLEX'):
+        cpxSLC = LICSARio.read_fast_slc_gamma_scomplex(rslcfile)
+        # no need to byteswap!!???
+    else:
+        cpxSLC = LICSARio.read_fast_slc_gamma_fcomplex(rslcfile)
+        cpxSLC = cpxSLC.byteswap()
+    mag = np.abs(cpxSLC)**2 # exaggerate
+    pha = np.angle(cpxSLC)
+    R = np.cos(pha) * mag
+    I = np.sin(pha) * mag
+    mag, pha = None, None
+    out = R + 1j * I
+    if (dtype1 == 'SCOMPLEX'):
+        # out
+        LICSARio.write_fast_slc_gamma_scomplex(out, rslcfile)
+    else:
+        LICSARio.write_fast_slc_gamma_fcomplex(out, rslcfile)
+
+
+def exaggerate_amplitude_rslcdir(rslcdir = 'RSLC'):
+    if not os.path.exists(rslcdir):
+        print('The directory '+rslcdir+' does not exist')
+        return False
+    for epoch in os.listdir(rslcdir):
+        epochrslc = os.path.join(rslcdir, epoch, epoch+'.rslc')
+        epochrslcbackup = os.path.join(rslcdir, epoch, epoch + '.rslc.orig')
+        if os.path.exists(epochrslc):
+            print(epoch)
+            if not os.path.exists(epochrslcbackup):
+                cmd = 'cp '+epochrslc+' '+epochrslcbackup
+                os.system(cmd)
+                exaggerate_amplitude(epochrslc)
+            else:
+                print('ERROR: the backup RSLC exists - probably already done, continuing')
+'''
+
+'''
+# STEP 2 - convert STAMPS PS outputs to nc:
+klstep = 0
+if klstep == 2:
+    for csv in [
+    '022D.csv',
+    '044A.csv',
+    '095D.csv',
+    '146A.csv'
+    ]:
+        outncfile=csv.replace('.csv','.nc')
+        nc = xr.open_dataset(outncfile)
+        periodname = 'Q12'
+        t1=dt.datetime(2025,1,1)
+        t2=dt.datetime(2025,5,31)
+        nc = create_period(nc, periodname, t1, t2)
+        #
+        periodname = 'Q34'
+        t1=dt.datetime(2025,6,1)
+        t2=dt.datetime(2025,8,31)
+        nc = create_period(nc, periodname, t1, t2)
+        #
+        increment = nc['displacement.Q34']-nc['displacement.Q12']
+        increment_std = nc['displacement_std.Q34']+nc['displacement_std.Q12']
+        # adding estimated std from temporal coherence:
+        nc['sigma_mmyr']=nc['vel'].copy()
+        nc['sigma_mmyr'].values=np.sqrt(1/(2*nc.coh.values**2))
+        #increment_std = increment_std+nc['sigma_mmyr'] # sigma_mmyr is per year, and our periods are (or..should be...) two half-years
+        nc['inc.Q34'] = increment
+        nc['inc.Q34.std'] = increment_std
+        outncfile=csv.replace('.csv','.v2.nc')
+        nc.to_netcdf(outncfile)
+
+## STEP 3: decompose (need LA!)
+# for x in *v2.nc; do a=`echo $x | cut -d '.' -f1`; frnc=`ls $a/*.nc | cut -d '/' -f2`; mv $x $frnc; done
+framesnc=['022D_03989_131313.nc','044A_03932_131313.nc','095D_03993_131313.nc','146A_04048_131313.nc']
+
+decompose_np_multi(input_data, beta = 0, do_velUN=False)
+
+def create_period(nc, periodname = 'Q12', t1=dt.datetime(2025,1,1), t2=dt.datetime(2025,5,31)):
+    # coordname = 'period'
+    colname_cumval = 'displacement'+'.'+periodname
+    colname_cumstd = 'displacement_std'+'.'+periodname
+    cumlyr = nc.cum.sel(time=slice(t1,t2))  # slice includes the end points
+    cumval = cumlyr.mean(axis=0)
+    cumstd = cumlyr.std(axis=0)
+    nc[colname_cumval] = cumval
+    nc[colname_cumstd] = cumstd
+    return nc
+
+'''
+
+# for colname in [colname_cumval, colname_cumstd]:
+#     if not colname in nc.data_vars:
+#         nc[colname] = xr.DataArray(dims=['lat', 'lon','period'],coords={'lat': nc.lat, 'lon': nc.lon,'period': []})
+#
+# cumval = cumval.expand_dims(dim=coordname, axis=-1).assign_coords({coordname: [periodname]})
+# cumval = xr.concat([nc[colname_cumval], cumval], dim=coordname)
+# cumstd = cumstd.expand_dims(dim=coordname, axis=-1).assign_coords({coordname: [periodname]})
+# cumstd = xr.concat([nc[colname_cumstd], cumstd], dim=coordname)
+# # ugly trick - xarray will not update the coords! so i first delete it...
+# nc = nc.drop_dims(coordname)
+# nc[colname_cumval] = cumval
+# nc[colname_cumstd] = cumstd
 
 '''from lixcor:
 import xarray as xr
