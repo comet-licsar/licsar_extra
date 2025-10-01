@@ -47,24 +47,26 @@ def loadall2cube(cumfile, column='cum', extracols=['loop_ph_avg_abs']):
 
     sizex = len(cum.vel[0])
     sizey = len(cum.vel)
-
-    lon = cum.corner_lon.values + cum.post_lon.values * np.arange(sizex) - 0.5 * float(cum.post_lon)
-    lat = cum.corner_lat.values + cum.post_lat.values * np.arange(sizey) + 0.5 * float(cum.post_lat)
-
-    time = np.array([dt.datetime.strptime(str(imd), '%Y%m%d') for imd in cum.imdates.values])
-
-    velxr = xr.DataArray(cum.vel.values.reshape(sizey, sizex), coords=[lat, lon], dims=["lat", "lon"])
-    velxr = velxr.where(velxr != 0)
+    
+    lon = cum.corner_lon.values+cum.post_lon.values*np.arange(sizex)-0.5*float(cum.post_lon)
+    lat = cum.corner_lat.values+cum.post_lat.values*np.arange(sizey)+0.5*float(cum.post_lat)  # maybe needed? yes! for gridline/AREA that is default in rasterio...
+    
+    time = np.array(([dt.datetime.strptime(str(imd), '%Y%m%d') for imd in cum.imdates.values]))
+    
+    velxr = xr.DataArray(cum.vel.values.reshape(sizey,sizex), coords=[lat, lon], dims=["lat", "lon"])
+    #LiCSBAS uses 0 instead of nans...
+    velxr = velxr.where(velxr!=0)
     velxr.attrs['unit'] = 'mm/year'
 
     # --- CHANGED: use the selected variable name ---
     cumxr = xr.DataArray(cum[column].values, coords=[time, lat, lon], dims=["time", "lat", "lon"])
     cumxr.attrs['unit'] = 'mm'
-
+    #bperpxr = xr.DataArray(cum.bperp.values, coords=[time], dims=["time"])
+    
     cube = xr.Dataset()
     cube[column] = cumxr     # keep the chosen name in the output
     cube['vel'] = velxr
-
+    #cube['vintercept'] = vinterceptxr
     try:
         cube['bperp'] = xr.DataArray(cum.bperp.values, coords=[time], dims=["time"])
         cube['bperp'] = cube.bperp.where(cube.bperp!=0)
@@ -108,7 +110,6 @@ def loadall2cube(cumfile, column='cum', extracols=['loop_ph_avg_abs']):
                 print('No '+e+' file detected, skipping')
     except:
         print('debug - extra layers not included')
-
     if os.path.exists(vstdfile):
         infile = np.fromfile(vstdfile, 'float32')
         vstdxr = xr.DataArray(infile.reshape(sizey,sizex), coords=[lat, lon], dims=["lat", "lon"])
