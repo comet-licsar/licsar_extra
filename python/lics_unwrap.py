@@ -1543,9 +1543,12 @@ def process_frame(frame = 'dummy', ml = 10, thres = 0.3,
                     else:
                         phatif=os.path.join(geoifgdir, pair, pair+'.geo.'+ext+'.tif')
                         # let's use filt cc if exists...
-                        cohtif = os.path.join(geoifgdir, pair, pair + '.geo.filt.cc.tif')
-                        if not os.path.exists(cohtif):
-                            cohtif=os.path.join(geoifgdir, pair, pair+'.geo.cc.tif')
+                        #cohtif = os.path.join(geoifgdir, pair, pair + '.geo.filt.cc.tif')
+                        #if not os.path.exists(cohtif):
+                        cohtif=os.path.join(geoifgdir, pair, pair+'.geo.cc.tif')
+                        #else:
+                        #    thres=0.45
+                        #    print('filt.cc file found - using it for masking (setting thres to '+str(thres)+')')
                         magtif=os.path.join(geoifgdir, pair, pair+'.geo.mag_cc.tif')
                         if not os.path.exists(magtif):
                             magtif = None
@@ -1998,7 +2001,7 @@ def load_from_nparrays(inpha,incoh,maskthres = 0.05):
     return ifg
 
 
-def load_from_tifs(phatif, cohtif, magtif = None, landmask_tif = None, cliparea_geo = None):
+def load_from_tifs(phatif, cohtif, magtif = None, landmask_tif = None, cliparea_geo = None, checkfiltcoh=True):
     inpha = load_tif2xr(phatif)
     incoh = load_tif2xr(cohtif)
     if incoh.max() > 2:
@@ -2012,6 +2015,16 @@ def load_from_tifs(phatif, cohtif, magtif = None, landmask_tif = None, cliparea_
         if os.path.exists(landmask_tif):
             landmask = load_tif2xr(landmask_tif)
             inmask.values = landmask.values * inmask.values
+    if checkfiltcoh:
+        filtcoh = cohtif.replace('geo.cc.tif', 'geo.filt.cc.tif')
+        if os.path.exists(filtcoh):
+            filtcoh = load_tif2xr(filtcoh)
+            filtcoh_thres=0.45
+            print('filt.cc file found - using it for masking (using thres of ' + str(filtcoh_thres) + ')')
+            if filtcoh.max() > 2:
+                filtcoh.values = filtcoh.values/255
+            fcmask=(filtcoh>filtcoh_thres)*1
+            inmask.values = fcmask.values * inmask.values
     ifg = xr.Dataset()
     ifg['pha'] = inpha
     ifg['coh'] = ifg['pha']
@@ -2625,6 +2638,7 @@ def remove_islands(npa, pixelsno = 50):
         np.array: array after removing islands
     """
     #check the mask - should be 1 for islands and 0 for nans
+    print('removing clusters of size below '+str(pixelno)+' pixels.')
     mask = ~np.isnan(npa)
     islands, ncomp = ndimage.label(mask)
     for i in range(ncomp):
