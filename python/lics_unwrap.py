@@ -1591,8 +1591,9 @@ def process_frame(frame = 'dummy', ml = 10, thres = 0.3,
                     #os.system('rm '+pair+'/'+pair+'.unw.ras')
                     os.system('rm -r '+pair+'/'+'temp_'+str(ml)+' 2>/dev/null')
                     os.system('rm -r '+pair+'/'+'temp_gen'+' 2>/dev/null')
-                except:
-                    print('ERROR processing of pair '+pair)
+                  except Exception as e:
+                    print(f'ERROR processing of pair {pair}: {e}')
+                    #print('ERROR processing of pair '+pair)
                     os.system('rm -r '+pair)
             if not os.path.exists(os.path.join(pair,pair+'.unw')):
                 print('some error occured and the unw was not processed')
@@ -2638,7 +2639,7 @@ def remove_islands(npa, pixelsno = 50):
         np.array: array after removing islands
     """
     #check the mask - should be 1 for islands and 0 for nans
-    print('removing clusters of size below '+str(pixelno)+' pixels.')
+    print('removing clusters of size below '+str(pixelsno)+' pixels.')
     mask = ~np.isnan(npa)
     islands, ncomp = ndimage.label(mask)
     for i in range(ncomp):
