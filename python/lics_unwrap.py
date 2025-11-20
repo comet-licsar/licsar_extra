@@ -3673,6 +3673,42 @@ def adf_filter_xr(inpha, incoh, tempadfdir = 'tempadfdir', blocklen=32, alpha=0.
     return outpha, outcoh
 
 
+def bilateral_filter_2d(data, sigma_spatial=3, sigma_intensity=0.1, kernel_radius=5):
+    """
+    Apply bilateral filter to a 2D float32 array.
+    - sigma_spatial: Controls how far neighboring pixels influence the result
+    - sigma_intensity: Controls how much intensity difference is tolerated (lower = stronger edge preservation)
+    - kernel_radius: Controls the size of the local window (e.g., 3 → 7×7 kernel)
+
+    Parameters:
+        data (np.ndarray): 2D float32 input array
+        sigma_spatial (float): spatial Gaussian std deviation
+        sigma_intensity (float): intensity similarity std deviation
+        kernel_radius (int): radius of the square kernel window
+
+    Returns:
+        np.ndarray: filtered array
+    """
+    padded = np.pad(data, kernel_radius, mode='reflect')
+    filtered = np.zeros_like(data)
+    # Precompute spatial Gaussian kernel
+    x = np.arange(-kernel_radius, kernel_radius + 1)
+    y = np.arange(-kernel_radius, kernel_radius + 1)
+    X, Y = np.meshgrid(x, y)
+    spatial_kernel = np.exp(-(X ** 2 + Y ** 2) / (2 * sigma_spatial ** 2))
+    for i in range(data.shape[0]):
+        for j in range(data.shape[1]):
+            i0, j0 = i + kernel_radius, j + kernel_radius
+            patch = padded[i0 - kernel_radius:i0 + kernel_radius + 1,
+                    j0 - kernel_radius:j0 + kernel_radius + 1]
+            intensity_diff = patch - padded[i0, j0]
+            intensity_kernel = np.exp(-(intensity_diff ** 2) / (2 * sigma_intensity ** 2))
+            combined_kernel = spatial_kernel * intensity_kernel
+            combined_kernel /= combined_kernel.sum()
+            filtered[i, j] = np.sum(patch * combined_kernel)
+    return filtered
+
+
 def goldstein_filter_xr(inpha, blocklen=16, alpha=0.8, ovlpx=None, nproc=1, returncoh=True,
                         mask_nyquist=False):  # ovlwin=8, nproc=1):
     """Goldstein filtering of phase
@@ -3681,7 +3717,7 @@ def goldstein_filter_xr(inpha, blocklen=16, alpha=0.8, ovlpx=None, nproc=1, retu
         inpha (xr.DataArray): array of phase (for now, the script will create cpx from phase)
         blocklen (int): size of rectangular window in pixels
         alpha (float): Goldstein alpha parameter
-        ovlpx (int): how many pixels should overlap the window
+        ovlpx (int): how many pixels should overlap the window (None means automatically blocklen/4)
         nproc (int): number of processors to be used by dask
         returncoh (boolean): return coherence instead of the spectral magnitude
 
