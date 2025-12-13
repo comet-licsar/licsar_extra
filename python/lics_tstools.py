@@ -109,7 +109,7 @@ def apply_func_in_volclipdir(volclip, predir = '/work/scratch-pw2/licsar/earmla/
                 print(tsgacosdir)
 
 
-def load_licsbas_cumh5_as_xrda(cumfile):
+def load_licsbas_cumh5_as_xrda(cumfile, dvars = ['cum','vel'] ):
     ''' Loads cum.h5 (now only cum layer) as standard xr.DataArray (in lon/lat)'''
     cum = xr.load_dataset(cumfile)
     #
@@ -121,14 +121,25 @@ def load_licsbas_cumh5_as_xrda(cumfile):
     #
     time = np.array(([dt.datetime.strptime(str(imd), '%Y%m%d') for imd in cum.imdates.values]))
     #
-    velxr = xr.DataArray(cum.vel.values.reshape(sizey, sizex), coords=[lat, lon], dims=["lat", "lon"])
-    # LiCSBAS uses 0 instead of nans...
-    velxr = velxr.where(velxr != 0)
-    velxr.attrs['unit'] = 'mm/year'
-    # vinterceptxr = xr.DataArray(cum.vintercept.values.reshape(sizey,sizex), coords=[lat, lon], dims=["lat", "lon"])
-    #
-    cumxr = xr.DataArray(cum.cum.values, coords=[time, lat, lon], dims=["time", "lat", "lon"])
-    cumxr.attrs['unit'] = 'mm'
+    out = xr.Dataset()
+    for dvar in dvars:
+        if len(cum[dvar].shape) == 2:
+            varxr = xr.DataArray(cum[dvar].values.reshape(sizey, sizex), coords=[lat, lon], dims=["lat", "lon"])
+            # LiCSBAS uses 0 instead of nans...
+            varxr = varxr.where(varxr != 0)
+            if dvar == 'vel':
+                varxr.attrs['unit'] = 'mm/year'
+            # vinterceptxr = xr.DataArray(cum.vintercept.values.reshape(sizey,sizex), coords=[lat, lon], dims=["lat", "lon"])
+            out[dvar]=varxr
+        elif len(cum[dvar].shape) == 3:
+            #
+            cumxr = xr.DataArray(cum[dvar].values, coords=[time, lat, lon], dims=["time", "lat", "lon"])
+            if dvar == 'cum':
+                cumxr.attrs['unit'] = 'mm'
+            out[dvar]=cumxr
+        else:
+            print('trying to add layer '+dvar)
+            out[dvar]=cum[dvar]
     refarea = str(cum.refarea.values)
     # x is first...
     refx1 = int(refarea.split('/')[0].split(':')[0])
@@ -137,9 +148,9 @@ def load_licsbas_cumh5_as_xrda(cumfile):
     refy2 = int(refarea.split('/')[1].split(':')[1])
     refx=int((refx2+refx1)/2)
     refy = int((refy2 + refy1) / 2)
-    cumxr.attrs['ref_lon'] = cumxr.lon.values[refx]
-    cumxr.attrs['ref_lat'] = cumxr.lat.values[refy]
-    return cumxr
+    out.attrs['ref_lon'] = out.lon.values[refx]
+    out.attrs['ref_lat'] = out.lat.values[refy]
+    return out
 
 
 def correct_cum_from_tifs(cumhdfile, tifdir = 'GEOC.EPOCHS', ext='geo.iono.code.tif', tif_scale2mm = 1, outputhdf = None, directcorrect = True, newcumname = 'external_data'):
