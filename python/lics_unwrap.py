@@ -2003,7 +2003,7 @@ def load_from_nparrays(inpha,incoh,maskthres = 0.05):
 
 
 def load_from_tifs(phatif, cohtif, magtif = None, landmask_tif = None, cliparea_geo = None, checkfiltcoh=True):
-    inpha = load_tif2xr(phatif)
+    inpha = load_tif2xr(phatif, fixnanzero=True)
     incoh = load_tif2xr(cohtif)
     if incoh.max() > 2:
         incoh.values = incoh.values/255
@@ -2122,7 +2122,7 @@ def load_ifg(frame, pair, unw=True, dolocal=False, mag=True,
     coh_file = os.path.join(geoifgdir,pair+'.geo.cc.tif')
     #landmask_file = os.path.join(geoframedir,'metadata',frame+'.geo.landmask.tif')
     # load the files
-    inpha = load_tif2xr(ifg_pha_file)
+    inpha = load_tif2xr(ifg_pha_file, fixnanzero=True)
     incoh = load_tif2xr(coh_file)
     if incoh.max() > 2:
         incoh.values = incoh.values/255
@@ -3312,7 +3312,7 @@ def get_fft_std(inarr):
     return magnitude_spectrum.mean()
 
 
-def load_tif2xr(tif, cliparea_geo=None, tolonlat=True):
+def load_tif2xr(tif, cliparea_geo=None, tolonlat=True, fixnanzero = False):
     """loads geotiff to xarray.DataArray
     
     Args:
@@ -3326,12 +3326,14 @@ def load_tif2xr(tif, cliparea_geo=None, tolonlat=True):
     xrpha = rioxarray.open_rasterio(tif)
     xrpha = xrpha.squeeze('band')
     xrpha = xrpha.drop('band')
-    
+    #
     if cliparea_geo:
         minclipx, maxclipx, minclipy, maxclipy = cliparea_geo2coords(cliparea_geo)
         xrpha = xrpha.sel(x=slice(minclipx, maxclipx), y=slice(maxclipy, minclipy))
     if tolonlat:
         xrpha = xrpha.rename({'x': 'lon','y': 'lat'})
+    if fixnanzero:
+        xrpha.values[xrpha.values==0]=np.nan
     return xrpha
 
 
@@ -4346,7 +4348,7 @@ def deramp_ifg_tif(phatif, unwrap_after = True):
     if not os.path.exists(phatif):
         print('the input tif does not exist, exiting')
         return 0
-    xrpha = load_tif2xr(phatif)
+    xrpha = load_tif2xr(phatif, fixnanzero=True)
     xrpha_detrended = detrend_ifg_xr(xrpha, isphase=True)
     xrpha_detrended = xrpha_detrended.where(xrpha != 0).fillna(0)
     phatif_orig = phatif.replace('.geo.'+ext+'.tif','.geo.'+ext+'.orig.tif')
