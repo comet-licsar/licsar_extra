@@ -311,12 +311,13 @@ def load_metatif(keystr='U', geocdir='GEOC', frame=None):
         return False
 
 
-def generate_pmm_velocity(frame, plate = 'Eurasia', geocdir = None, outif = None):
+def generate_pmm_velocity(frame, plate = 'Eurasia', geocdir = None, outif = None, azi = False):
     '''This will generate LOS velocity for selected tectonic plate, such as for absolute referencing towards Eurasia..
     uses MintPy functionality that implements velocity calculation using Euler poles rather than plate motion model with plates defined as polygons.
 
     For all codes, see licsbas_mintpy_PMM
     If geocdir is None, it will search directly on LiCSAR system (if you run this on JASMIN..)
+    If azi, it will use E[NU].azi tif files..
     '''
     import licsbas_mintpy_PMM as pmm
     sampling = 20000  # m --- note, this is only primary sampling, we will then interpolate to fit the frame data
@@ -330,11 +331,14 @@ def generate_pmm_velocity(frame, plate = 'Eurasia', geocdir = None, outif = None
         unit='mas/yr',
     )
     # pole_obj.print_info()
-
+    if azi:
+        azistr='.azi'
+    else:
+        azistr=''
     # getting the frame data
-    E = load_metatif('E', geocdir, frame)
-    N = load_metatif('N', geocdir, frame)
-    U = load_metatif('U', geocdir, frame)
+    E = load_metatif('E'+azistr, geocdir, frame)
+    N = load_metatif('N'+azistr, geocdir, frame)
+    U = load_metatif('U'+azistr, geocdir, frame)
 
     # coarsening unit vector U as template for the plate velocity
     resolution = get_resolution(U, in_m=True)  # just mean avg in both lon, lat should be ok
