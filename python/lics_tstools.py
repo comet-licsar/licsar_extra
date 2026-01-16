@@ -304,7 +304,7 @@ def load_metatif(keystr='U', geocdir='GEOC', frame=None):
             M = None
     if M:
         M = load_tif2xr(M)
-        M = M.where(M != 0)
+        #M = M.where(M != 0)
         return M
     else:
         print('ERROR: no ' + keystr + ' layer exists')
@@ -374,6 +374,7 @@ def generate_pmm_velocity(frame, plate = 'Eurasia', geocdir = None, outif = None
     # 2.
     print('Calculating the plate motion velocity in LOS (please check the sign here)')
     vlos_plate = ve*E + vn*N + vu*U
+    vlos_plate = vlos_plate.where(vlos_plate!=0)
     vlos_plate = 1000*vlos_plate # to mm/year
     if outif:
         export_xr2tif(vlos_plate, outif, dogdal = False)
