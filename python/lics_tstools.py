@@ -216,7 +216,11 @@ def cumcube_remove_from_tifs(cumxr, tifdir = 'GEOC.EPOCHS', ext='geo.iono.code.t
     '''
     #if check_complete_set(cumxr.time.values)
     #times = cumxr.time.values
-    reflon, reflat = cumxr.attrs['ref_lon'], cumxr.attrs['ref_lat']
+    try:
+        reflon, reflat = cumxr.attrs['ref_lon'], cumxr.attrs['ref_lat']
+    except:
+        print('warning, no ref area information')
+        reflon, reflat = None, None
     #
     firstepvals = 0
     leneps = len(cumxr)
@@ -236,7 +240,10 @@ def cumcube_remove_from_tifs(cumxr, tifdir = 'GEOC.EPOCHS', ext='geo.iono.code.t
             extepoch = extepoch.where(extepoch != 0) # just in case...
             extepoch = extepoch * tif_scale2mm
             extepoch = extepoch.interp_like(cumepoch, method='linear') # CHECK!
-            extepoch = extepoch - extepoch.sel(lon=reflon, lat=reflat, method='nearest') # could be done better though
+            if reflon:
+                extepoch = extepoch - extepoch.sel(lon=reflon, lat=reflat, method='nearest') # could be done better though
+            else:
+                extepoch = extepoch - extepoch.mean()
         if i == 0:
             firstepvals = extepoch.fillna(0).values
         # here we do diff w.r.t. first epoch
