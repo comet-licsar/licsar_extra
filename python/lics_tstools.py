@@ -403,7 +403,7 @@ def cumcube_sbovl_remove_from_tifs(cumxr, tifdir = 'GEOC.EPOCHS', ext='geo.iono.
             ##scaling2dfdc
             scaling_factor=load_tif2xr(scaling_tif)
             scaling_factor = scaling_factor.interp_like(cumepoch, method='linear')
-            # dfDC=azpix*PRF/(2*np.pi*scaling_factor)
+            dfDC=azpix*PRF/(2*np.pi*scaling_factor)
             dfDC=4350 #TODO, this is a constant value for now, but should be calculated from scaling_factor #MN
             fH = f0 + dfDC*0.5
             fL = f0 - dfDC*0.5
