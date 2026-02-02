@@ -229,7 +229,7 @@ def apply_func_in_volclipdir(volclip, predir = '/work/scratch-pw2/licsar/earmla/
                 print(tsgacosdir)
 
 
-def load_licsbas_cumh5_as_xrda(cumfile):
+def load_licsbas_cumh5_as_xrda(cumfile, dvars = ['cum','vel'] ):
     ''' Loads cum.h5 (now only cum layer) as standard xr.DataArray (in lon/lat)'''
     # print(cumfile)
     cum = xr.load_dataset(cumfile) #, engine='h5netcdf')  # or 'netcdf4'
@@ -242,14 +242,25 @@ def load_licsbas_cumh5_as_xrda(cumfile):
     #
     time = np.array(([dt.datetime.strptime(str(imd), '%Y%m%d') for imd in cum.imdates.values]))
     #
-    velxr = xr.DataArray(cum.vel.values.reshape(sizey, sizex), coords=[lat, lon], dims=["lat", "lon"])
-    # LiCSBAS uses 0 instead of nans...
-    velxr = velxr.where(velxr != 0)
-    velxr.attrs['unit'] = 'mm/year'
-    # vinterceptxr = xr.DataArray(cum.vintercept.values.reshape(sizey,sizex), coords=[lat, lon], dims=["lat", "lon"])
-    #
-    cumxr = xr.DataArray(cum.cum.values, coords=[time, lat, lon], dims=["time", "lat", "lon"])
-    cumxr.attrs['unit'] = 'mm'
+    out = xr.Dataset()
+    for dvar in dvars:
+        if len(cum[dvar].shape) == 2:
+            varxr = xr.DataArray(cum[dvar].values.reshape(sizey, sizex), coords=[lat, lon], dims=["lat", "lon"])
+            # LiCSBAS uses 0 instead of nans...
+            varxr = varxr.where(varxr != 0)
+            if dvar == 'vel':
+                varxr.attrs['unit'] = 'mm/year'
+            # vinterceptxr = xr.DataArray(cum.vintercept.values.reshape(sizey,sizex), coords=[lat, lon], dims=["lat", "lon"])
+            out[dvar]=varxr
+        elif len(cum[dvar].shape) == 3:
+            #
+            cumxr = xr.DataArray(cum[dvar].values, coords=[time, lat, lon], dims=["time", "lat", "lon"])
+            if dvar == 'cum':
+                cumxr.attrs['unit'] = 'mm'
+            out[dvar]=cumxr
+        else:
+            print('trying to add layer '+dvar)
+            out[dvar]=cum[dvar]
     refarea = str(cum.refarea.values)
     # x is first...
     refx1 = int(refarea.split('/')[0].split(':')[0])
@@ -258,9 +269,9 @@ def load_licsbas_cumh5_as_xrda(cumfile):
     refy2 = int(refarea.split('/')[1].split(':')[1])
     refx=int((refx2+refx1)/2)
     refy = int((refy2 + refy1) / 2)
-    cumxr.attrs['ref_lon'] = cumxr.lon.values[refx]
-    cumxr.attrs['ref_lat'] = cumxr.lat.values[refy]
-    return cumxr
+    out.attrs['ref_lon'] = out.lon.values[refx]
+    out.attrs['ref_lat'] = out.lat.values[refy]
+    return out
 
 
 def correct_cum_from_tifs(cumhdfile, tifdir = 'GEOC.EPOCHS', ext='geo.iono.code.tif', tif_scale2mm = 1, sbovl=False ,outputhdf = None, directcorrect = True, newcumname = 'external_data'):
@@ -457,7 +468,11 @@ def cumcube_remove_from_tifs(cumxr, tifdir = 'GEOC.EPOCHS', ext='geo.iono.code.t
     '''
     #if check_complete_set(cumxr.time.values)
     #times = cumxr.time.values
-    reflon, reflat = cumxr.attrs['ref_lon'], cumxr.attrs['ref_lat']
+    try:
+        reflon, reflat = cumxr.attrs['ref_lon'], cumxr.attrs['ref_lat']
+    except:
+        print('warning, no ref area information')
+        reflon, reflat = None, None
     #
     firstepvals = 0
     leneps = len(cumxr)
@@ -478,16 +493,19 @@ def cumcube_remove_from_tifs(cumxr, tifdir = 'GEOC.EPOCHS', ext='geo.iono.code.t
             extepoch = extepoch.where(extepoch != 0) # just in case...
             extepoch = extepoch * tif_scale2mm
             extepoch = extepoch.interp_like(cumepoch, method='linear') # CHECK!
+
             # if not sbovl_abs:
                 # reflon, reflat = cumxr.attrs['ref_lon'], cumxr.attrs['ref_lat']
-            extepoch = extepoch - extepoch.sel(lon=reflon, lat=reflat, method='nearest') # could be done better though
+            if reflon:
+                extepoch = extepoch - extepoch.sel(lon=reflon, lat=reflat, method='nearest') # could be done better though
+            else:
+                extepoch = extepoch - extepoch.mean()
         except Exception as e:
             print(f'\n\r WARNING: failed to load correction for epoch {epoch}: {str(e)}')
             error_log.append(extif)
             extepoch = cumepoch.copy() * np.nan
             extepoch.attrs.clear()    
-            
-            
+        
         if i == 0:
             firstepvals = extepoch.fillna(0).values
         # here we do diff w.r.t. first epoch
@@ -563,19 +581,20 @@ def load_metatif(keystr='U', geocdir='GEOC', frame=None):
             M = None
     if M:
         M = load_tif2xr(M)
-        M = M.where(M != 0)
+        #M = M.where(M != 0)
         return M
     else:
         print('ERROR: no ' + keystr + ' layer exists')
         return False
 
 
-def generate_pmm_velocity(frame, plate = 'Eurasia', geocdir = None, outif = None, sboi=False):
+def generate_pmm_velocity(frame, plate = 'Eurasia', geocdir = None, outif = None, azi = False):
     '''This will generate LOS velocity for selected tectonic plate, such as for absolute referencing towards Eurasia..
     uses MintPy functionality that implements velocity calculation using Euler poles rather than plate motion model with plates defined as polygons.
 
     For all codes, see licsbas_mintpy_PMM
     If geocdir is None, it will search directly on LiCSAR system (if you run this on JASMIN..)
+    If azi, it will use E[NU].azi tif files..
     '''
     import licsbas_mintpy_PMM as pmm
     sampling = 20000  # m --- note, this is only primary sampling, we will then interpolate to fit the frame data
@@ -589,18 +608,15 @@ def generate_pmm_velocity(frame, plate = 'Eurasia', geocdir = None, outif = None
         unit='mas/yr',
     )
     # pole_obj.print_info()
-
-    # getting the frame data
-    if sboi:
-        print('PMM calculation in azimuth direction')
-        E = load_metatif('E.azi', geocdir, frame)
-        N = load_metatif('N.azi', geocdir, frame)
-        U = load_metatif('U.azi', geocdir, frame)
+    if azi:
+        azistr='.azi'
     else:
-        print('PMM calculation in range direction')
-        E = load_metatif('E', geocdir, frame)
-        N = load_metatif('N', geocdir, frame)
-        U = load_metatif('U', geocdir, frame)
+        azistr=''
+    # getting the frame data
+    E = load_metatif('E'+azistr, geocdir, frame)
+    N = load_metatif('N'+azistr, geocdir, frame)
+    U = load_metatif('U'+azistr, geocdir, frame)
+
     # coarsening unit vector U as template for the plate velocity
     resolution = get_resolution(U, in_m=True)  # just mean avg in both lon, lat should be ok
     # how large area is covered
@@ -633,12 +649,9 @@ def generate_pmm_velocity(frame, plate = 'Eurasia', geocdir = None, outif = None
     vu = Uml.interp_like(U, method='linear', kwargs={"fill_value": "extrapolate"})
 
     # 2.
-    if sboi:
-        print('Calculating the plate motion velocity in Azi (please check the sign here)')
-        vlos_plate = ve*E + vn*N
-    else:
-        print('Calculating the plate motion velocity in LOS (please check the sign here)')
-        vlos_plate = ve*E + vn*N + vu*U
+    print('Calculating the plate motion velocity in LOS (please check the sign here)')
+    vlos_plate = ve*E + vn*N + vu*U #double check if vu is nan or zero
+    vlos_plate = vlos_plate.where(vlos_plate!=0)
     vlos_plate = 1000*vlos_plate # to mm/year
     if outif:
         export_xr2tif(vlos_plate, outif, dogdal = False)

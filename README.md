@@ -8,7 +8,9 @@ ESA Open SAR Library 4000140600/23/I-DT extension, recognised as the [AlignSAR I
 
 You may install this set of tools e.g. using pip by:  
 `
-pip install git+https://github.com/comet-licsar/licsar_extra.git
+pip install git+https://github.com/comet-licsar/licsar_extra.git  
+# and later update it using:  
+# pip install --upgrade --force-reinstall git+https://github.com/comet-licsar/licsar_extra.git  
 `
 
 Then, to test it, try e.g.:  
