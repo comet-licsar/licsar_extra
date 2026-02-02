@@ -5,3 +5,6 @@
 .idea/modules.xml
 .idea/vcs.xml
 .idea/workspace.xml
+__pycache__/
+lics_tstools_last.py
+trial

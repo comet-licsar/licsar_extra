@@ -10,6 +10,7 @@
 
 from lics_unwrap import *
 import re, os, glob
+from scipy.constants import speed_of_light
 #import datetime as dt
 #t1 = dt.datetime(2016, 7, 1)
 #t2 = dt.datetime(2017, 7, 31)
@@ -25,6 +26,125 @@ def grep1line(arg,filename):
     if res:
         res = res.split('\n')[0]
     return res
+
+def loadall2cube(cumfile, column='cum', extracols=['loop_ph_avg_abs']):
+    cumdir = os.path.dirname(cumfile)
+    cohfile = os.path.join(cumdir,'results/coh_avg')
+    rmsfile = os.path.join(cumdir,'results/resid_rms')
+    vstdfile = os.path.join(cumdir,'results/vstd')
+    stcfile = os.path.join(cumdir,'results/stc')
+    maskfile = os.path.join(cumdir,'results/mask')
+    metafile = os.path.join(cumdir,'../../metadata.txt')
+    #h5datafile = 'cum.h5'
+    cum = xr.load_dataset(cumfile)
+
+    # --- NEW: validate that the requested column exists ---
+    if column not in cum.data_vars:
+        raise ValueError(
+            f"Requested column '{column}' not found in dataset. "
+            f"Available data variables: {list(cum.data_vars)}"
+        )
+
+    sizex = len(cum.vel[0])
+    sizey = len(cum.vel)
+    
+    lon = cum.corner_lon.values+cum.post_lon.values*np.arange(sizex)-0.5*float(cum.post_lon)
+    lat = cum.corner_lat.values+cum.post_lat.values*np.arange(sizey)+0.5*float(cum.post_lat)  # maybe needed? yes! for gridline/AREA that is default in rasterio...
+    
+    time = np.array(([dt.datetime.strptime(str(imd), '%Y%m%d') for imd in cum.imdates.values]))
+    
+    velxr = xr.DataArray(cum.vel.values.reshape(sizey,sizex), coords=[lat, lon], dims=["lat", "lon"])
+    #LiCSBAS uses 0 instead of nans...
+    velxr = velxr.where(velxr!=0)
+    velxr.attrs['unit'] = 'mm/year'
+
+    # --- CHANGED: use the selected variable name ---
+    cumxr = xr.DataArray(cum[column].values, coords=[time, lat, lon], dims=["time", "lat", "lon"])
+    cumxr.attrs['unit'] = 'mm'
+    #bperpxr = xr.DataArray(cum.bperp.values, coords=[time], dims=["time"])
+    
+    cube = xr.Dataset()
+    cube[column] = cumxr     # keep the chosen name in the output
+    cube['vel'] = velxr
+    #cube['vintercept'] = vinterceptxr
+    try:
+        cube['bperp'] = xr.DataArray(cum.bperp.values, coords=[time], dims=["time"])
+        cube['bperp'] = cube.bperp.where(cube.bperp!=0)
+        # re-ref it to the first date
+        if np.isnan(cube['bperp'][0]):
+            firstbperp = 0
+        else:
+            firstbperp = cube['bperp'][0]
+        cube['bperp'] = cube['bperp'] - firstbperp
+        cube['bperp'] = cube.bperp.astype(np.float32)
+        cube.bperp.attrs['unit'] = 'm'
+    except:
+        print('some error loading bperp info')
+    
+    #if 'mask' in cum:
+    #    # means this is filtered version, i.e. cum_filt.h5
+    cube.attrs['filtered_version'] = 'mask' in cum
+    
+    #add coh_avg resid_rms vstd
+    if os.path.exists(cohfile):
+        infile = np.fromfile(cohfile, 'float32')
+        cohxr = xr.DataArray(infile.reshape(sizey,sizex), coords=[lat, lon], dims=["lat", "lon"])
+        cube['coh'] = cohxr
+        cube.coh.attrs['unit']='unitless'
+    else: print('No coh_avg file detected, skipping')
+    if os.path.exists(rmsfile):
+        infile = np.fromfile(rmsfile, 'float32')
+        rmsxr = xr.DataArray(infile.reshape(sizey,sizex), coords=[lat, lon], dims=["lat", "lon"])
+        rmsxr.attrs['unit'] = 'mm'
+        cube['rms'] = rmsxr
+    else: print('No RMS file detected, skipping')
+    try:
+        for e in extracols:
+            efile=os.path.join(cumdir,'results',e)
+            if os.path.exists(efile):
+                infile = np.fromfile(efile, 'float32')   # should be always float. but we can check with os.stat('loop_ph_avg_abs').st_size
+                exr = xr.DataArray(infile.reshape(sizey, sizex), coords=[lat, lon], dims=["lat", "lon"])
+                #rmsxr.attrs['unit'] = 'mm'
+                cube[e] = exr
+            else:
+                print('No '+e+' file detected, skipping')
+    except:
+        print('debug - extra layers not included')
+    if os.path.exists(vstdfile):
+        infile = np.fromfile(vstdfile, 'float32')
+        vstdxr = xr.DataArray(infile.reshape(sizey,sizex), coords=[lat, lon], dims=["lat", "lon"])
+        vstdxr.attrs['unit'] = 'mm/year'
+        cube['vstd'] = vstdxr
+    else: print('No vstd file detected, skipping')
+    if os.path.exists(stcfile):
+        infile = np.fromfile(stcfile, 'float32')
+        stcxr = xr.DataArray(infile.reshape(sizey,sizex), coords=[lat, lon], dims=["lat", "lon"])
+        stcxr.attrs['unit'] = 'mm'
+        cube['stc'] = stcxr
+    else: print('No stc file detected, skipping')
+    if os.path.exists(maskfile):
+        infile = np.fromfile(maskfile, 'float32')
+        #infile = np.nan_to_num(infile,0).astype(int)  # change nans to 0
+        infile = np.nan_to_num(infile,0).astype(np.int8)  # change nans to 0
+        maskxr = xr.DataArray(infile.reshape(sizey,sizex), coords=[lat, lon], dims=["lat", "lon"])
+        maskxr.attrs['unit'] = 'unitless'
+        cube['mask'] = maskxr
+    else: print('No mask file detected, skipping')
+    # add inc_angle
+    if os.path.exists(metafile):
+        #a = subp.run(['grep','inc_angle', metafile], stdout=subp.PIPE)
+        #inc_angle = float(a.stdout.decode('utf-8').split('=')[1])
+        inc_angle = float(grep1line('inc_angle',metafile).split('=')[1])
+        cube.attrs['inc_angle'] = inc_angle
+    else: print('')#'warning, metadata file not found. using general inc angle value')
+        #inc_angle = 39
+    
+    #cube['bperp'] = bperpxr
+    #cube[]
+    cube.rio.set_spatial_dims(x_dim="lon", y_dim="lat", inplace=True)
+    cube.rio.write_crs("EPSG:4326", inplace=True)
+    #cube = cube.sortby(['time','lon','lat']) # 2025/03: not really right as lat should be opposite-signed..
+    return cube
 
 
 
@@ -111,7 +231,8 @@ def apply_func_in_volclipdir(volclip, predir = '/work/scratch-pw2/licsar/earmla/
 
 def load_licsbas_cumh5_as_xrda(cumfile, dvars = ['cum','vel'] ):
     ''' Loads cum.h5 (now only cum layer) as standard xr.DataArray (in lon/lat)'''
-    cum = xr.load_dataset(cumfile)
+    # print(cumfile)
+    cum = xr.load_dataset(cumfile) #, engine='h5netcdf')  # or 'netcdf4'
     #
     sizex = len(cum.vel[0])
     sizey = len(cum.vel)
@@ -153,7 +274,7 @@ def load_licsbas_cumh5_as_xrda(cumfile, dvars = ['cum','vel'] ):
     return out
 
 
-def correct_cum_from_tifs(cumhdfile, tifdir = 'GEOC.EPOCHS', ext='geo.iono.code.tif', tif_scale2mm = 1, outputhdf = None, directcorrect = True, newcumname = 'external_data'):
+def correct_cum_from_tifs(cumhdfile, tifdir = 'GEOC.EPOCHS', ext='geo.iono.code.tif', tif_scale2mm = 1, sbovl=False ,outputhdf = None, directcorrect = True, newcumname = 'external_data'):
     ''' This will load the cum.h5 and either correct cum layer (if directcorrect==True) or add new data var to the cube (if not directcorrect)
 
     Args:
@@ -170,18 +291,23 @@ def correct_cum_from_tifs(cumhdfile, tifdir = 'GEOC.EPOCHS', ext='geo.iono.code.
     if not outputhdf:
         outputhdf = cumhdfile
     print('loading LiCSBAS datacube')
+    print('you are running hacked correct_cum script. (MN)')
     cumxr = load_licsbas_cumh5_as_xrda(cumhdfile)
     print('loading external corrections')
-    cumxr = cumcube_remove_from_tifs(cumxr, tifdir, ext, tif_scale2mm, only_load_ext = not directcorrect)
+    if 'STEC' in ext.upper():
+        cumxr = cumcube_sbovl_remove_from_tifs(cumxr, tifdir, ext, tif_scale2mm, only_load_ext = not directcorrect)
+    else:
+        cumxr = cumcube_remove_from_tifs(cumxr, tifdir=tifdir, ext=ext, tif_scale2mm=tif_scale2mm, sbovl=sbovl, only_load_ext=not directcorrect)
     if type(cumxr) == type(False):
         print('ERROR - probably the correction did not exist for some epochs. Cancelling')
         return False
     cumh = xr.load_dataset(cumhdfile)
     if directcorrect:
-        cumh.cum.values = cumh.cum.values - cumxr.values
+        print('directly corrected')
+        # breakpoint()
+        cumh.cum.values = cumxr.values ## we already correct it in the cumcube_remove_from_tifs #MN
     else:
-
-        codes = ['iono', 'tide', 'icams']
+        codes = ['iono', 'tide', 'icams', 'sltd']
         for c in codes:
             if ext.find(c)>-1:
                 newcumname = c
@@ -198,8 +324,134 @@ def correct_cum_from_tifs(cumhdfile, tifdir = 'GEOC.EPOCHS', ext='geo.iono.code.
     return True
 
 
+# looks a bit complex so I will create for sbovl specifically
+def cumcube_sbovl_remove_from_tifs(cumxr, tifdir = 'GEOC.EPOCHS', ext='geo.iono.code.sTECA.tif', tif_scale2mm = 14000, only_load_ext = False):
+    ''' Correct directly from tifs, no need to store in cubes.
+    NOTE - you can also just load the exts into the cumcube without removing anything..
+    (in any case, values are referred temporally to the first epoch)
+    
+    Args:
+        cumxr (xr.DataArray): only cum
+        tifdir:
+        ext1: sTECA
+        ext2: sTECB
+        tif_scale2mm:  for iono [rad]: 14000 for sTECA/B
+        only_load_ext:  would only load the ext files in the cube and return it (no removal!)
+        
+    Returns:
+        xr.DataArray: corrected cum values (only_load_ext=False) or only loaded corrections
+    '''
+    #if check_complete_set(cumxr.time.values)
+    #times = cumxr.time.values
+    reflon, reflat = cumxr.attrs['ref_lon'], cumxr.attrs['ref_lat']
+    #
+    print('sbovl activated')
+    firstepvals = 0
+    leneps = len(cumxr)
+    error_log = []
+    for i in range(leneps): # times first coord..
+        print('  Running for {0:6}/{1:6}th epoch'.format(i+1, leneps), flush=True, end='\r')
+        cumepoch = cumxr[i]
+        epoch = str(cumepoch.time.values).split('T')[0].replace('-','')
+        if 'STEC' in ext.upper():
+            ext1='geo.iono.code.sTECA.tif'
+            ext2='geo.iono.code.sTECB.tif'
+        extif1 = os.path.join(tifdir, epoch, epoch+'.'+ext1)
+        extif2 = os.path.join(tifdir, epoch, epoch+'.'+ext2)
+        if not os.path.exists(extif1) or not os.path.exists(extif2):
+            extif1 = os.path.join(tifdir, epoch+'.'+ext1)
+            extif2 = os.path.join(tifdir, epoch+'.'+ext2)
+        
+        try:
+            if not os.path.exists(extif1) or not os.path.exists(extif2):
+                raise FileNotFoundError(f'File not found: {extif1} or {extif2}')
+            #backward
+            extepoch1 = load_tif2xr(extif1)
+            extepoch1 = extepoch1.where(extepoch1 != 0) # just in case...
+            extepoch1 = extepoch1.interp_like(cumepoch, method='linear') # CHECK! ##looks redundant so far (maybe not)
+            #forward
+            extepoch2 = load_tif2xr(extif2)
+            extepoch2 = extepoch2.where(extepoch2 != 0)
+            extepoch2 = extepoch2.interp_like(cumepoch, method='linear')
+            
+            ####gradient method Lazecky et al. 2023,GRL #https://github.com/comet-licsar/daz/blob/main/lib/daz_iono.py#L561
+            ###parameter for TEC gradient
+            azpix=14000
+            PRF = 486.486
+            k = 40.308193 # m^3 / s^2
+            f0 = 5.4050005e9
+            c = speed_of_light
+        
+            ##scaling_tif
+            workdir=os.getcwd()
+            frame=os.path.basename(workdir)
+            metafolder = os.path.join(os.environ['LiCSAR_public'], str(int(frame[:3])), frame, 'metadata')
+            # Check if the metadata folder exists
+            if os.path.exists(metafolder) and os.path.isdir(metafolder):
+                scaling_tif = None  # Initialize variable to track if a file is found
+                
+                for files in os.listdir(metafolder):  
+                    if files.endswith('bovl_scaling.tif'):
+                        scaling_tif = os.path.join(metafolder, files)
+                     
+                # Check if no scaling file was found
+                if scaling_tif is None:
+                    raise FileNotFoundError("No .geo.sbovl_scaling.tif file found in metadata folder.")
+            else:
+                raise FileNotFoundError("metadata is not exist in LiCSAR_public")    
+
+            ##scaling2dfdc
+            scaling_factor=load_tif2xr(scaling_tif)
+            scaling_factor = scaling_factor.interp_like(cumepoch, method='linear')
+            dfDC=azpix*PRF/(2*np.pi*scaling_factor)
+            # dfDC=4350 #TODO, this is a constant value for now, but should be calculated from scaling_factor #MN
+            fH = f0 + dfDC*0.5
+            fL = f0 - dfDC*0.5
+            tecovl=(extepoch1/fH-extepoch2/fL)
+            iono_grad = 2*PRF*k/c/dfDC * tecovl #unitless
+            iono_grad_mm=iono_grad*azpix #mm
+            
+        except Exception as e:
+            print(f'\n\r WARNING: failed to load or compute correction for epoch {epoch}: {str(e)}')
+            error_log.append(epoch)
+            iono_grad_mm = cumepoch.copy() * np.nan
+            iono_grad_mm.attrs.clear()
+        
+        ##TODO check this useful for sbovl or not? We are using absolute so skip that! 
+        ref_value = iono_grad_mm.sel(lon=reflon, lat=reflat, method='nearest')
+        # If ref_value is NaN, replace it with 0
+        if np.isnan(ref_value.values):
+            ref_value = 0  # Assign zero to avoid NaN propagation
+        else:
+            ref_value = ref_value.values  # Extract actual value
+
+        # Apply reference correction
+        iono_grad_mm = iono_grad_mm - ref_value
+        
+        # ##fill na with 0
+        # iono_grad_mm=iono_grad_mm.fillna(0)
+                
+        if i == 0:
+            firstepvals = iono_grad_mm.fillna(0).values
+        # here we do diff w.r.t. first epoch
+        iono_grad_mm.values = iono_grad_mm.values - firstepvals
+        
+        if only_load_ext:
+            cumxr.values[i] = iono_grad_mm.values
+        else:
+            cumxr.values[i] = cumxr.values[i] - iono_grad_mm.values
+    print('\n\r  done')
+    
+    # Save the list of failed epochs
+    if error_log:
+        with open(f"failed_{ext}.txt", "w") as f:
+            for epoch in error_log:
+                f.write(epoch + "\n")
+        print(f"\nSaved list of failed epochs to failed_{ext}.txt")
+    return cumxr
+
 # def check_complete_set(imdates, epochsdir, ext='geo.iono.code.tif')
-def cumcube_remove_from_tifs(cumxr, tifdir = 'GEOC.EPOCHS', ext='geo.iono.code.tif', tif_scale2mm = 1, only_load_ext = False):
+def cumcube_remove_from_tifs(cumxr, tifdir = 'GEOC.EPOCHS', ext='geo.iono.code.tif', sbovl=False,tif_scale2mm = 1, only_load_ext = False):
     ''' Correct directly from tifs, no need to store in cubes.
     NOTE - you can also just load the exts into the cumcube without removing anything..
     (in any case, values are referred temporally to the first epoch)
@@ -224,6 +476,8 @@ def cumcube_remove_from_tifs(cumxr, tifdir = 'GEOC.EPOCHS', ext='geo.iono.code.t
     #
     firstepvals = 0
     leneps = len(cumxr)
+    error_log = [] ##to save/remove/recreate for second iteration
+    
     for i in range(leneps): # times first coord..
         print('  Running for {0:6}/{1:6}th epoch'.format(i+1, leneps), flush=True, end='\r')
         cumepoch = cumxr[i]
@@ -231,19 +485,27 @@ def cumcube_remove_from_tifs(cumxr, tifdir = 'GEOC.EPOCHS', ext='geo.iono.code.t
         extif = os.path.join(tifdir, epoch, epoch+'.'+ext)
         if not os.path.exists(extif):
             extif = os.path.join(tifdir, epoch + '.' + ext)
-        if not os.path.exists(extif):
-            print('\n\r WARNING: no correction available for epoch '+epoch+'. Filling with NaNs')
-            extepoch = cumepoch.copy() * np.nan
-            extepoch.attrs.clear()
-        else:
+        
+        try:
+            if not os.path.exists(extif):
+                raise FileNotFoundError(f'File not found: {extif}')
             extepoch = load_tif2xr(extif)
             extepoch = extepoch.where(extepoch != 0) # just in case...
             extepoch = extepoch * tif_scale2mm
             extepoch = extepoch.interp_like(cumepoch, method='linear') # CHECK!
+
+            # if not sbovl_abs:
+                # reflon, reflat = cumxr.attrs['ref_lon'], cumxr.attrs['ref_lat']
             if reflon:
                 extepoch = extepoch - extepoch.sel(lon=reflon, lat=reflat, method='nearest') # could be done better though
             else:
                 extepoch = extepoch - extepoch.mean()
+        except Exception as e:
+            print(f'\n\r WARNING: failed to load correction for epoch {epoch}: {str(e)}')
+            error_log.append(extif)
+            extepoch = cumepoch.copy() * np.nan
+            extepoch.attrs.clear()    
+        
         if i == 0:
             firstepvals = extepoch.fillna(0).values
         # here we do diff w.r.t. first epoch
@@ -255,6 +517,14 @@ def cumcube_remove_from_tifs(cumxr, tifdir = 'GEOC.EPOCHS', ext='geo.iono.code.t
         else:
             cumxr.values[i] = cumxr.values[i] - extepoch.values
     print('\n\r  done')
+    
+    # Save the list of failed paths
+    if error_log:
+        with open(f"failed_{ext}.txt", "w") as f:
+            for path in error_log:
+                f.write(path + "\n")
+        print(f"\nSaved list of corrupted or missing files to corrupted_ext_tifs.txt")
+
     #if only_load_ext:
     #    cumxr = cumxr-cumxr[0] #.cumsum(axis=0)
     #    cumxr = cumxr.cumsum(axis=0)-cumxr[0]
@@ -380,7 +650,7 @@ def generate_pmm_velocity(frame, plate = 'Eurasia', geocdir = None, outif = None
 
     # 2.
     print('Calculating the plate motion velocity in LOS (please check the sign here)')
-    vlos_plate = ve*E + vn*N + vu*U
+    vlos_plate = ve*E + vn*N + vu*U #double check if vu is nan or zero
     vlos_plate = vlos_plate.where(vlos_plate!=0)
     vlos_plate = 1000*vlos_plate # to mm/year
     if outif:
