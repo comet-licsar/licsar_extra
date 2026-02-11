@@ -353,7 +353,7 @@ ifg_ml = process_ifg(frame, pair, procdir = procdir, ml = 1,
 """
 
 def process_ifg(frame, pair, procdir = os.getcwd(), 
-        ml = 10, fillby = 'gauss', thres = 0.2, smooth = False, lowpass = True, 
+        ml = 10, fillby = 'gauss', thres = 0.2, smooth = False, lowpass = False,
         goldstein = True, specmag = False, prefer_unfiltered = True,
         defomax = 0.6, hgtcorr = False, gacoscorr = True, pre_detrend = True,
         cliparea_geo = None, outtif = None, prevest = None, prev_ramp = None,
@@ -493,7 +493,7 @@ for p in pairs:
 
 def process_ifg_pair(phatif, cohtif, procpairdir = os.getcwd(), landmask_tif = None, magtif = None,
         ml = 10, fillby = 'gauss', thres = 0.2, cascade = False, 
-        smooth = False, lowpass = True, goldstein = True, specmag = False, spatialmask_km = 2.0,
+        smooth = False, lowpass = False, goldstein = True, specmag = False, spatialmask_km = 2.0,
         defomax = 0.6, frame = '', hgtcorr = False, gacoscorr = True, pre_detrend = True,
         cliparea_geo = None, outtif = None, prevest = None, prev_ramp = None,
         coh2var = False, add_resid = True,  rampit=False, subtract_gacos = False,
@@ -606,7 +606,7 @@ def process_ifg_pair(phatif, cohtif, procpairdir = os.getcwd(), landmask_tif = N
 
 
 def process_ifg_core(ifg, tmpdir = os.getcwd(), 
-        ml = 10, fillby = 'nearest', thres = 0.35, smooth = False, lowpass = True,
+        ml = 10, fillby = 'nearest', thres = 0.35, smooth = False, lowpass = False,
         goldstein = True, specmag = True,
         defomax = 0.6, hgtcorr = False, gacoscorr = True, pre_detrend = True,
         cliparea_geo = None, outtif = None, prevest = None, prev_ramp = None,
