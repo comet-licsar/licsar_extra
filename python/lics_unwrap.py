@@ -809,7 +809,7 @@ def process_ifg_core(ifg, tmpdir = os.getcwd(),
             else:
                 pha2unw = gaussfill(tofillpha)
             cpx = pha2cpx(pha2unw.values)
-        else:
+        elif fillby == 'nearest':
             if 'lat' not in tofillpha.dims:
                 pha2unw = interpolate_nans(tofillpha.values, method='nearest')   # this takes 2 min 24 s for ml1 -- but will keep it anyway, as rio needs coord sys
                 cpx = pha2cpx(pha2unw)
@@ -825,6 +825,10 @@ def process_ifg_core(ifg, tmpdir = os.getcwd(),
                     print('error in rio interpolate - maybe no coord sys set? doing the bit longer way')
                     pha2unw = interpolate_nans(tofillpha.values, method='nearest')   # this takes 2 min 24 s for ml1 -- but will keep it anyway, as rio needs coord sys
                     cpx = pha2cpx(pha2unw)
+        else:
+            # assuming fillby='none'
+            print('filling phase nans by zeroes')
+            cpx = pha2cpx((pha2unw-pha2unw.median()).fillna(0).values)
         #coh = sp  # actually ,let's use the phasediff if we use specmag...
         if not specmag:
             #phadiff=wrap2phase((ifg_ml['filtpha']-ifg_ml['pha']).values)
@@ -4036,6 +4040,8 @@ def build_amp_avg_std(frame, return_ampstab = False, input_is_intensity = True):
         frame (str)
         return_ampstab (bool): if True, returns amplitude stability, otherwise avg amp and std amp
     """
+    # TODO: change to use MLIs in local folder (may exist)
+    # TODO: check if D_A from mean and std of DIFF AMPLITUDEs would be better than using mean amplitude, i.e. D_A=std(\Delta A)/mean(\Delta A), or as in Hooper, 2008: D_A=std(\Delta A)/mean_A
     # input_is_intensity(bool): if True, will first convert the input work with intensity (amp squared)
     try:
         import framecare as fc
