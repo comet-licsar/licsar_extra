@@ -3109,8 +3109,13 @@ def unwrap_np(cpx, coh, defomax = 0.3, tmpdir=os.path.join(os.getcwd(),'tmpunwnp
     if not os.path.exists(tmpdir):
         os.mkdir(tmpdir)
     elif deltemp:
-        print('error, tmpdir '+tmpdir+' already exists, stopping here')
-        return False
+        print('error, tmpdir '+tmpdir+' already exists! this should not happen. setting the folder to: ')
+        import random, string
+        chars = string.ascii_letters + string.digits
+        rndnm = ''.join(random.choices(chars, k=8))
+        tmpdir = os.path.join(tmpdir, rndnm)
+        print(tmpdir)
+        os.mkdir(tmpdir)
     if type(mask) != type(False):
         try:
             binmask= os.path.join(tmpdir,'mask.bin')
