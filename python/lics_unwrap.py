@@ -353,7 +353,7 @@ ifg_ml = process_ifg(frame, pair, procdir = procdir, ml = 1,
 """
 
 def process_ifg(frame, pair, procdir = os.getcwd(), 
-        ml = 10, fillby = 'gauss', thres = 0.2, smooth = False, lowpass = True, 
+        ml = 10, fillby = 'gauss', thres = 0.2, smooth = False, lowpass = False,
         goldstein = True, specmag = False, prefer_unfiltered = True,
         defomax = 0.6, hgtcorr = False, gacoscorr = True, pre_detrend = True,
         cliparea_geo = None, outtif = None, prevest = None, prev_ramp = None,
@@ -493,7 +493,7 @@ for p in pairs:
 
 def process_ifg_pair(phatif, cohtif, procpairdir = os.getcwd(), landmask_tif = None, magtif = None,
         ml = 10, fillby = 'gauss', thres = 0.2, cascade = False, 
-        smooth = False, lowpass = True, goldstein = True, specmag = False, spatialmask_km = 2.0,
+        smooth = False, lowpass = False, goldstein = True, specmag = False, spatialmask_km = 2.0,
         defomax = 0.6, frame = '', hgtcorr = False, gacoscorr = True, pre_detrend = True,
         cliparea_geo = None, outtif = None, prevest = None, prev_ramp = None,
         coh2var = False, add_resid = True,  rampit=False, subtract_gacos = False,
@@ -606,7 +606,7 @@ def process_ifg_pair(phatif, cohtif, procpairdir = os.getcwd(), landmask_tif = N
 
 
 def process_ifg_core(ifg, tmpdir = os.getcwd(), 
-        ml = 10, fillby = 'nearest', thres = 0.35, smooth = False, lowpass = True,
+        ml = 10, fillby = 'nearest', thres = 0.35, smooth = False, lowpass = False,
         goldstein = True, specmag = True,
         defomax = 0.6, hgtcorr = False, gacoscorr = True, pre_detrend = True,
         cliparea_geo = None, outtif = None, prevest = None, prev_ramp = None,
@@ -809,7 +809,7 @@ def process_ifg_core(ifg, tmpdir = os.getcwd(),
             else:
                 pha2unw = gaussfill(tofillpha)
             cpx = pha2cpx(pha2unw.values)
-        else:
+        elif fillby == 'nearest':
             if 'lat' not in tofillpha.dims:
                 pha2unw = interpolate_nans(tofillpha.values, method='nearest')   # this takes 2 min 24 s for ml1 -- but will keep it anyway, as rio needs coord sys
                 cpx = pha2cpx(pha2unw)
@@ -825,6 +825,10 @@ def process_ifg_core(ifg, tmpdir = os.getcwd(),
                     print('error in rio interpolate - maybe no coord sys set? doing the bit longer way')
                     pha2unw = interpolate_nans(tofillpha.values, method='nearest')   # this takes 2 min 24 s for ml1 -- but will keep it anyway, as rio needs coord sys
                     cpx = pha2cpx(pha2unw)
+        else:
+            # assuming fillby='none'
+            print('filling phase nans by zeroes')
+            cpx = pha2cpx((pha2unw-pha2unw.median()).fillna(0).values)
         #coh = sp  # actually ,let's use the phasediff if we use specmag...
         if not specmag:
             #phadiff=wrap2phase((ifg_ml['filtpha']-ifg_ml['pha']).values)
@@ -3105,8 +3109,13 @@ def unwrap_np(cpx, coh, defomax = 0.3, tmpdir=os.path.join(os.getcwd(),'tmpunwnp
     if not os.path.exists(tmpdir):
         os.mkdir(tmpdir)
     elif deltemp:
-        print('error, tmpdir '+tmpdir+' already exists, stopping here')
-        return False
+        print('error, tmpdir '+tmpdir+' already exists! this should not happen. setting the folder to: ')
+        import random, string
+        chars = string.ascii_letters + string.digits
+        rndnm = ''.join(random.choices(chars, k=8))
+        tmpdir = os.path.join(tmpdir, rndnm)
+        print(tmpdir)
+        os.mkdir(tmpdir)
     if type(mask) != type(False):
         try:
             binmask= os.path.join(tmpdir,'mask.bin')
@@ -4036,6 +4045,8 @@ def build_amp_avg_std(frame, return_ampstab = False, input_is_intensity = True):
         frame (str)
         return_ampstab (bool): if True, returns amplitude stability, otherwise avg amp and std amp
     """
+    # TODO: change to use MLIs in local folder (may exist)
+    # TODO: check if D_A from mean and std of DIFF AMPLITUDEs would be better than using mean amplitude, i.e. D_A=std(\Delta A)/mean(\Delta A), or as in Hooper, 2008: D_A=std(\Delta A)/mean_A
     # input_is_intensity(bool): if True, will first convert the input work with intensity (amp squared)
     try:
         import framecare as fc
