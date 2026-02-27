@@ -292,8 +292,10 @@ def correct_cum_from_tifs(cumhdfile, tifdir = 'GEOC.EPOCHS', ext='geo.iono.code.
         outputhdf = cumhdfile
     print('loading LiCSBAS datacube')
 
-    cumxr = load_licsbas_cumh5_as_xrda(cumhdfile)
-    cumxr = cumxr.cum # we only need 'cum' layer for correction (MN). load_licsbas_cumh5_as_xrda add cum and vel now, therefore rest of the code crash if we dont.
+    ds = load_licsbas_cumh5_as_xrda(cumhdfile)
+    cumxr = ds.cum.copy()
+    cumxr.attrs = {**ds.attrs, **cumxr.attrs}
+
     print('loading external corrections')
     if 'STEC' in ext.upper():
         cumxr = cumcube_sbovl_remove_from_tifs(cumxr, tifdir, ext, only_load_ext = not directcorrect)
