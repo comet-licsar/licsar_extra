@@ -342,7 +342,7 @@ def cumcube_sbovl_remove_from_tifs(cumxr, tifdir = 'GEOC.EPOCHS', ext='geo.iono.
     '''
     
     try:
-        reflon, reflat = cumxr.attrs['ref_lon'], cumxr.attrs['ref_lat'] #MN to ML? we skip reflat and reflon actually both LoS and SBOI just doing mean? 
+        reflon, reflat = cumxr.attrs['ref_lon'], cumxr.attrs['ref_lat'] #MN to ML? we skip reflat and reflon actually both LoS and SBOI just doing mean, why is the reason?
     except:
         print('warning, no ref area information')
         reflon, reflat = None, None
