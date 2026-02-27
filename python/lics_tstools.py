@@ -274,7 +274,7 @@ def load_licsbas_cumh5_as_xrda(cumfile, dvars = ['cum','vel'] ):
     return out
 
 
-def correct_cum_from_tifs(cumhdfile, tifdir = 'GEOC.EPOCHS', ext='geo.iono.code.tif', tif_scale2mm = 1, sbovl=False ,outputhdf = None, directcorrect = True, newcumname = 'external_data'): #TODO double check lateer
+def correct_cum_from_tifs(cumhdfile, tifdir = 'GEOC.EPOCHS', ext='geo.iono.code.tif', tif_scale2mm = 1, sbovl=False ,outputhdf = None, directcorrect = True, newcumname = 'external_data'):
     ''' This will load the cum.h5 and either correct cum layer (if directcorrect==True) or add new data var to the cube (if not directcorrect)
 
     Args:
@@ -291,8 +291,9 @@ def correct_cum_from_tifs(cumhdfile, tifdir = 'GEOC.EPOCHS', ext='geo.iono.code.
     if not outputhdf:
         outputhdf = cumhdfile
     print('loading LiCSBAS datacube')
-    print('you are running hacked correct_cum script. (MN)')
+
     cumxr = load_licsbas_cumh5_as_xrda(cumhdfile)
+    cumxr = cumxr.cum # we only need 'cum' layer for correction (MN). load_licsbas_cumh5_as_xrda add cum and vel now, therefore rest of the code crash if we dont.
     print('loading external corrections')
     if 'STEC' in ext.upper():
         cumxr = cumcube_sbovl_remove_from_tifs(cumxr, tifdir, ext, only_load_ext = not directcorrect)
@@ -303,9 +304,7 @@ def correct_cum_from_tifs(cumhdfile, tifdir = 'GEOC.EPOCHS', ext='geo.iono.code.
         return False
     cumh = xr.load_dataset(cumhdfile)
     if directcorrect:
-        # print('directly corrected')
-        # breakpoint()
-        cumh.cum.values = cumxr.values ## we already correct it in the cumcube_remove_from_tifs #MN   # you are right - thanks for fixing! ML
+        cumh.cum.values = cumxr.values
     else:
         codes = ['iono', 'tide', 'icams', 'sltd']
         for c in codes:
@@ -325,13 +324,13 @@ def correct_cum_from_tifs(cumhdfile, tifdir = 'GEOC.EPOCHS', ext='geo.iono.code.
 
 
 # looks a bit complex so I will create for sbovl specifically
-def cumcube_sbovl_remove_from_tifs(cumxr, tifdir = 'GEOC.EPOCHS', ext='geo.iono.code.sTECA.tif',  only_load_ext = False): #TODO double check lateer
+def cumcube_sbovl_remove_from_tifs(cumxr, tifdir = 'GEOC.EPOCHS', ext='geo.iono.code.sTECA.tif',  only_load_ext = False):
     ''' Correct directly from tifs, no need to store in cubes.
     NOTE - you can also just load the exts into the cumcube without removing anything..
     (in any case, values are referred temporally to the first epoch)
     
     Args:
-        cumxr (xr.DataArray): only cum
+        cumxr (xr.DataArray): input cum.h5 file (only cum)
         tifdir:
         ext1: sTECA
         ext2: sTECB
@@ -341,15 +340,14 @@ def cumcube_sbovl_remove_from_tifs(cumxr, tifdir = 'GEOC.EPOCHS', ext='geo.iono.
     Returns:
         xr.DataArray: corrected cum values (only_load_ext=False) or only loaded corrections
     '''
-    #if check_complete_set(cumxr.time.values)
-    #times = cumxr.time.values
+    
     try:
-        reflon, reflat = cumxr.attrs['ref_lon'], cumxr.attrs['ref_lat']
+        reflon, reflat = cumxr.attrs['ref_lon'], cumxr.attrs['ref_lat'] #MN to ML? we skip reflat and reflon actually both LoS and SBOI just doing mean? 
     except:
         print('warning, no ref area information')
         reflon, reflat = None, None
-    #
-    print('sbovl activated')
+    
+    print('sbovl-iono correction is being applied')
     firstepvals = 0
     leneps = len(cumxr)
     error_log = []
@@ -420,22 +418,12 @@ def cumcube_sbovl_remove_from_tifs(cumxr, tifdir = 'GEOC.EPOCHS', ext='geo.iono.
             error_log.append(epoch)
             iono_grad_mm = cumepoch.copy() * np.nan
             iono_grad_mm.attrs.clear()
-
+        
         if reflon:
-            ##TODO check this useful for sbovl or not? We are using absolute so skip that!
-            ref_value = iono_grad_mm.sel(lon=reflon, lat=reflat, method='nearest')
-            # If ref_value is NaN, replace it with 0
-            if np.isnan(ref_value.values):
-                ref_value = 0  # Assign zero to avoid NaN propagation
-            else:
-                ref_value = ref_value.values  # Extract actual value
-            #
-            # Apply reference correction
-            iono_grad_mm = iono_grad_mm - ref_value
-            #
-            # ##fill na with 0
-            # iono_grad_mm=iono_grad_mm.fillna(0)
-        #
+            iono_grad_mm = iono_grad_mm - iono_grad_mm.sel(lon=reflon, lat=reflat, method='nearest')
+        else:
+            iono_grad_mm = iono_grad_mm - iono_grad_mm.mean(skipna=True)
+            
         if i == 0:
             firstepvals = iono_grad_mm.fillna(0).values
         # here we do diff w.r.t. first epoch
@@ -456,7 +444,7 @@ def cumcube_sbovl_remove_from_tifs(cumxr, tifdir = 'GEOC.EPOCHS', ext='geo.iono.
     return cumxr
 
 # def check_complete_set(imdates, epochsdir, ext='geo.iono.code.tif')
-def cumcube_remove_from_tifs(cumxr, tifdir = 'GEOC.EPOCHS', ext='geo.iono.code.tif', sbovl=False,tif_scale2mm = 1, only_load_ext = False):
+def cumcube_remove_from_tifs(cumxr, tifdir = 'GEOC.EPOCHS', ext='geo.iono.code.tif',tif_scale2mm = 1, only_load_ext = False):
     ''' Correct directly from tifs, no need to store in cubes.
     NOTE - you can also just load the exts into the cumcube without removing anything..
     (in any case, values are referred temporally to the first epoch)
@@ -504,7 +492,7 @@ def cumcube_remove_from_tifs(cumxr, tifdir = 'GEOC.EPOCHS', ext='geo.iono.code.t
             if reflon:
                 extepoch = extepoch - extepoch.sel(lon=reflon, lat=reflat, method='nearest') # could be done better though
             else:
-                extepoch = extepoch - extepoch.mean()
+                extepoch = extepoch - extepoch.mean(skipna=True)
         except Exception as e:
             print(f'\n\r WARNING: failed to load correction for epoch {epoch}: {str(e)}')
             error_log.append(extif)
