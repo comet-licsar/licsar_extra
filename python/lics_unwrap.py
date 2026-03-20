@@ -1455,6 +1455,9 @@ def process_frame(frame = 'dummy', ml = 10, thres = 0.3,
     # clean the pairset
     r = re.compile('[1,2]...[0,1].[0-3]._[1,2]...[0,1].[0-3].')
     pairset = [pair for pair in pairset if r.match(pair)]
+    if len(pairset) == 0:
+        print('ERROR, there are no pair folders in '+inputifgdir+'. Cancelling')
+        return False
     # check for existence of GACOS corrections. if there is only for one epoch, skip that pair.
     # (this way we ensure that we keep also epochs with no gacos data, but will not cause phase loop closure errors with the GACOS-corrected pairs)
     if gacoscorr:
