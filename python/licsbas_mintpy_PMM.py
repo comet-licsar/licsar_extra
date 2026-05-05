@@ -18,6 +18,26 @@
 import collections
 import numpy as np
 import pyproj
+import os
+import geopandas as gpd
+from shapely.geometry import Point
+
+# ML 2026: to get plate based on lon lat, we will use PB2002 dataset (loaded locally), from https://github.com/fraxen/tectonicplates
+def get_plate_in_coord(lon, lat):
+    script_path = os.path.abspath(__file__)
+    platejson = script_path.split('/')[:-2]+['data/PB2002_plates.json']
+    platejson = os.path.join('/',*platejson)
+    plates = gpd.read_file(platejson)
+    # Ensure lon/lat CRS
+    plates = plates.to_crs("EPSG:4326")
+    point = Point(lon, lat)
+    match = plates[plates.contains(point)]
+    if match.empty:
+        print('no plate found')
+        return None
+    plate = match.iloc[0]['PlateName']
+    return plate
+
 
 # global variables
 MAS2RAD = np.pi / 3600000 / 180    # 1 mas (milli arc second) = x radian
