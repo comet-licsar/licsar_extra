@@ -22,10 +22,10 @@ import os
 import geopandas as gpd
 from shapely.geometry import Point
 
-# ML 2026: to get plate based on lon lat, we will use PB2002 dataset (loaded locally), from https://github.com/fraxen/tectonicplates
+# ML 2026: to get plate based on lon lat, we will use PB2002 dataset (with modified plate names) originally from https://github.com/fraxen/tectonicplates
 def get_plate_in_coord(lon, lat):
     script_path = os.path.abspath(__file__)
-    platejson = script_path.split('/')[:-2]+['data/PB2002_plates.json']
+    platejson = script_path.split('/')[:-2]+['data/PB2002_plates.modified.geojson']
     platejson = os.path.join('/',*platejson)
     plates = gpd.read_file(platejson)
     # Ensure lon/lat CRS
