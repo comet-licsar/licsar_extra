@@ -84,10 +84,11 @@ if in_ipynb():
     pyproj.datadir.set_data_dir('/gws/smf/j04/nceo_geohazards/software/mambalics/share/proj')
 
 
-try:
-    import dask.array as da
-except:
-    print('dask not loaded - hgt correlation will not work')
+#try:
+import dask.array as da
+# needed for hgt correlation but also for goldstein filter...
+#except:
+#    print('dask not loaded - hgt correlation will not work')
 
 
 try:
