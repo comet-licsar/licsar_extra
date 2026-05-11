@@ -784,18 +784,19 @@ def process_ifg_core(ifg, tmpdir = os.getcwd(),
         else:
             sp = ifg_ml['coh'].values
         spmask=sp>thres
-        # and remove islands - let's keep the 2x2 km islands...
-        npa=spmask*1.0
-        npa[npa==0]=np.nan
-        # lenthres = 2000  # m
-        lenthres = spatialmask_km * 1000
-        mlres = get_resolution(ifg_ml, in_m=True)
-        # ok, but we can trust clusters of maxpx pixels..
-        maxpx = 16 * 16
-        pixels = int(round(lenthres / mlres))
-        pixelsno = min(pixels ** 2, maxpx)
-        if type(extweights) == type(None):
-            spmask=remove_islands(npa, pixelsno)
+        if spatialmask_km > 0:
+            # and remove islands - let's keep the 2x2 km islands...
+            npa=spmask*1.0
+            npa[npa==0]=np.nan
+            # lenthres = 2000  # m
+            lenthres = spatialmask_km * 1000
+            mlres = get_resolution(ifg_ml, in_m=True)
+            # ok, but we can trust clusters of maxpx pixels..
+            maxpx = 16 * 16
+            pixels = int(round(lenthres / mlres))
+            pixelsno = min(pixels ** 2, maxpx)
+            if type(extweights) == type(None):
+                spmask=remove_islands(npa, pixelsno)
         #delta = np.angle(np.exp(1j*(ifg_ml['filtpha'] - ifg_ml['pha'])))
         #mask = np.abs(delta<1)*1
         ifg_ml['mask_filt'] = ifg_ml['mask_extent']
