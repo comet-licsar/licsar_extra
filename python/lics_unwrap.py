@@ -43,14 +43,7 @@ from sklearn.linear_model import HuberRegressor
 import time
 import matplotlib.pyplot as plt
 import glob
-try:
-    import pyinterp.backends.xarray
-    # Module that handles the filling of undefined values.
-    import pyinterp.fill
-    use_pyinterp = True
-except:
-    print('WARNING, pyinterp not installed - rampit will contain gaps (may not influence your outputs)')
-    use_pyinterp = False
+
 
 
 # check if there is snaphu
@@ -84,12 +77,23 @@ if in_ipynb():
     pyproj.datadir.set_data_dir('/gws/smf/j04/nceo_geohazards/software/mambalics/share/proj')
 
 
-#try:
-import dask.array as da
-# needed for hgt correlation but also for goldstein filter...
-#except:
-#    print('dask not loaded - hgt correlation will not work')
+try:
+    import dask.array as da
+    # needed for hgt correlation but also for goldstein filter...
+except ImportError:
+    print('dask not loaded - not using parallelism')
+    da = None
 
+USE_DASK = da is not None
+
+try:
+    import pyinterp.backends.xarray
+    # Module that handles the filling of undefined values.
+    import pyinterp.fill
+    use_pyinterp = True
+except ImportError:
+    print('WARNING, pyinterp not installed - rampit will contain gaps (may not influence your outputs)')
+    use_pyinterp = False
 
 try:
     from LiCSAR_lib.LiCSAR_misc import *
@@ -3180,17 +3184,58 @@ def calculate_gradient(xar, deramp=False):
 def correct_hgt(ifg_mlc, blocklen = 20, tmpdir = os.getcwd(), dounw = True, num_workers = 1, nonlinear=False, minheight=200, mingausscoh=0.4):
     #ifg_ml['hgtcorr'] = ifg_ml['pha']
     winsize = (blocklen, blocklen)
-    cohb = da.from_array(ifg_mlc['coh'].where(ifg_mlc.gauss_coh>mingausscoh).where(ifg_mlc.hgt>minheight).astype(np.float32).fillna(0.001), chunks=winsize)
-    #phab = da.from_array(ifg_ml['pha'].astype(np.float32).fillna(0), chunks=winsize)
-    cpxb = da.from_array(ifg_mlc['cpx'].where(ifg_mlc.gauss_coh>mingausscoh).where(ifg_mlc.hgt>minheight).astype(np.complex64).fillna(0), chunks=winsize)
-    hgtb = da.from_array(ifg_mlc['hgt'].where(ifg_mlc.gauss_coh>mingausscoh).where(ifg_mlc.hgt>minheight).astype(np.float32).fillna(0), chunks=winsize)
-    f = da.map_blocks(block_hgtcorr, cpxb, cohb, hgtb, procdir = tmpdir, dounw = dounw, meta=np.array(()), chunks = (1,1))
-    try:
-        #with nostdout():
-        hgtcorr =  f.compute(num_workers=num_workers)
-    except:
-        print('error in computing hgt correlation grid')
-        return False, 'bool'
+    if USE_DASK:
+        cohb = da.from_array(ifg_mlc['coh'].where(ifg_mlc.gauss_coh>mingausscoh).where(ifg_mlc.hgt>minheight).astype(np.float32).fillna(0.001), chunks=winsize)
+        #phab = da.from_array(ifg_ml['pha'].astype(np.float32).fillna(0), chunks=winsize)
+        cpxb = da.from_array(ifg_mlc['cpx'].where(ifg_mlc.gauss_coh>mingausscoh).where(ifg_mlc.hgt>minheight).astype(np.complex64).fillna(0), chunks=winsize)
+        hgtb = da.from_array(ifg_mlc['hgt'].where(ifg_mlc.gauss_coh>mingausscoh).where(ifg_mlc.hgt>minheight).astype(np.float32).fillna(0), chunks=winsize)
+        f = da.map_blocks(block_hgtcorr, cpxb, cohb, hgtb, procdir = tmpdir, dounw = dounw, meta=np.array(()), chunks = (1,1))
+        try:
+            #with nostdout():
+            hgtcorr =  f.compute(num_workers=num_workers)
+        except:
+            print('error in computing hgt correlation grid')
+            return False, 'bool'
+    else:
+        mask = (ifg_mlc.gauss_coh > mingausscoh) & (ifg_mlc.hgt > minheight)
+        coh = (
+            ifg_mlc['coh']
+            .where(mask)
+            .astype(np.float32)
+            .fillna(0.001)
+            .values
+        )
+        cpx = (
+            ifg_mlc['cpx']
+            .where(mask)
+            .astype(np.complex64)
+            .fillna(0)
+            .values
+        )
+        hgt = (
+            ifg_mlc['hgt']
+            .where(mask)
+            .astype(np.float32)
+            .fillna(0)
+            .values
+        )
+        ny, nx = coh.shape
+        tile_values = []  # this replaces the lazy dask array
+        for y in range(0, ny, blocklen):
+            for x in range(0, nx, blocklen):
+                ys = slice(y, min(y + blocklen, ny))
+                xs = slice(x, min(x + blocklen, nx))
+                # block_hgtcorr returns np.array([[toret]])
+                val = block_hgtcorr(
+                    cpx[ys, xs],
+                    coh[ys, xs],
+                    hgt[ys, xs],
+                    procdir=tmpdir,
+                    dounw=dounw
+                )
+                # extract scalar safely
+                tile_values.append(val.item())
+        hgtcorr = np.array(tile_values)
     # make it to xr:
     aaa = xr.Dataset()
     aaa['coh'] = ifg_mlc['coh'].fillna(0).coarsen({'lat': blocklen, 'lon': blocklen}, boundary='pad').mean()
@@ -3644,6 +3689,35 @@ def goldstein_AHML(block, alpha=0.8, kernelsigma=0.75, mask_nyquist=False, retur
     return cpxfilt
 
 
+
+
+
+def extract_with_reflect(arr, ys, xs, pad):
+    ''' helper function to replace dask map_overlay reflect'''
+    y0, y1 = ys.start, ys.stop
+    x0, x1 = xs.start, xs.stop
+    #
+    ys_pad = slice(max(y0 - pad, 0), min(y1 + pad, arr.shape[0]))
+    xs_pad = slice(max(x0 - pad, 0), min(x1 + pad, arr.shape[1]))
+    #
+    sub = arr[ys_pad, xs_pad]
+    #
+    pad_y_before = max(pad - y0, 0)
+    pad_y_after  = max(y1 + pad - arr.shape[0], 0)
+    pad_x_before = max(pad - x0, 0)
+    pad_x_after  = max(x1 + pad - arr.shape[1], 0)
+    #
+    if pad_y_before or pad_y_after or pad_x_before or pad_x_after:
+        sub = np.pad(
+            sub,
+            ((pad_y_before, pad_y_after),
+             (pad_x_before, pad_x_after)),
+            mode="reflect"
+        )
+    #
+    return sub
+
+
 def adf_filter_xr(inpha, incoh, tempadfdir = 'tempadfdir', blocklen=32, alpha=0.5):
     """Gamma ADF filter incorporated here
 
@@ -3742,19 +3816,40 @@ def goldstein_filter_xr(inpha, blocklen=16, alpha=0.8, ovlpx=None, nproc=1, retu
     if ovlpx == None:
         ovlpx = int(blocklen / 4)  # does it make sense? gamma recommends /8 but this might be too much?
     # dask works by adding extra pixels around the block window. thus calculate the central window here:
-    blocklen = blocklen - ovlpx
+    block_core = blocklen - ovlpx
     outpha = inpha.copy()
     incpx = pha2cpx(inpha.fillna(0).values)
-    winsize = (blocklen-ovlpx, blocklen-ovlpx)
-    incpxb = da.from_array(incpx, chunks=winsize)
-    # f=cpxb.map_overlap(goldstein_AH, alpha=alpha, depth=ovlpx, boundary='reflect', meta=np.array((), dtype=np.complex128), chunks = (1,1))
-    f = incpxb.map_overlap(goldstein_AHML, alpha=alpha, mask_nyquist=mask_nyquist, returnphadiff = returncoh,
-                         depth=ovlpx, boundary='reflect',
-                         meta=np.array((), dtype=np.complex128), chunks=(1, 1))
-    cpxb = f.compute(num_workers=nproc)
-    outpha.values = np.angle(cpxb)
+    winsize = (block_core-ovlpx, block_core-ovlpx)
+    if USE_DASK:
+        incpxb = da.from_array(incpx, chunks=winsize)
+        # f=cpxb.map_overlap(goldstein_AH, alpha=alpha, depth=ovlpx, boundary='reflect', meta=np.array((), dtype=np.complex128), chunks = (1,1))
+        f = incpxb.map_overlap(goldstein_AHML, alpha=alpha, mask_nyquist=mask_nyquist, returnphadiff = returncoh,
+                             depth=ovlpx, boundary='reflect',
+                             meta=np.array((), dtype=np.complex128), chunks=(1, 1))
+        outcpx = f.compute(num_workers=nproc)
+    else:
+        ny, nx = incpx.shape
+        outcpx = np.zeros((ny, nx), dtype=np.complex128)
+        for y in range(0, ny, block_core):
+            for x in range(0, nx, block_core):
+                ys = slice(y, min(y + block_core, ny))
+                xs = slice(x, min(x + block_core, nx))
+                # extract overlapped tile
+                tile = extract_with_reflect(incpx, ys, xs, ovlpx)
+                # apply your filter
+                tile_out = goldstein_AHML(
+                    tile,
+                    alpha=alpha,
+                    mask_nyquist=mask_nyquist,
+                    returnphadiff=returncoh
+                )
+                # crop back to core region
+                yc = slice(ovlpx, ovlpx + (ys.stop - ys.start))
+                xc = slice(ovlpx, ovlpx + (xs.stop - xs.start))
+                outcpx[ys, xs] = tile_out[yc, xc]
+    outpha.values = np.angle(outcpx)
     outmag = outpha.copy()
-    outmag.values = np.abs(cpxb)
+    outmag.values = np.abs(outcpx)
     outmag.values[outmag.values > 1] = 1 # just in case..
     if returncoh:
         # obsolete, will probably remove it

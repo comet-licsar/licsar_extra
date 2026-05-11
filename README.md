@@ -34,6 +34,9 @@ unwcube = lics_unwrap.process_ifg_pair(phatif, cohtif,
         outtif = outunw, cascade = False) # try cascade True/False, it has strong effect
 ```
 
+Note, if dask and pyinterp is present, it will use those libraries (optionally)
+
+
 ## lics_tstools.py
 Useful functions to operate with the LiCSBAS datacube.
 

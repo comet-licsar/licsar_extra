@@ -12,5 +12,5 @@ setup(
     package_dir = {'licsar_extra':'python'},
     install_requires = ['numpy',
 'matplotlib','xarray','rioxarray','pandas',
-'scipy','astropy','scikit-learn','gdal>=2.4', 'dask']
+'scipy','astropy','scikit-learn','gdal>=2.4']
 )
