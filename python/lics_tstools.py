@@ -705,18 +705,22 @@ def df2nc(df, outncfile=None, resol=0.0025, extracols=[], compressnc=True):
     nc = medgrid[cols].to_xarray()
     # velcol = 'vel'
     nc = nc.rename({'VEL': 'vel', 'COHER': 'coh'})
-    #
-    # now convert from dates
-    datum = dates[0]
-    a = medgrid[datum].to_xarray().assign_coords(
-        {'time': dt.datetime.strptime(datum, '%Y-%m-%d')}).expand_dims('time').rename('cum')
-    for datum in dates[1:]:
-        b = medgrid[datum].to_xarray().assign_coords(
+    if len(dates)==0:
+        print('WARNING - no correct date columns set - exporting only vel, coh layers')
+        dates = None
+    else:
+        #
+        # now convert from dates
+        datum = dates[0]
+        a = medgrid[datum].to_xarray().assign_coords(
             {'time': dt.datetime.strptime(datum, '%Y-%m-%d')}).expand_dims('time').rename('cum')
-        a = xr.concat([a, b], dim='time')
-    #
-    nc = nc.assign_coords({'time': a.time.values})
-    nc['cum'] = a
+        for datum in dates[1:]:
+            b = medgrid[datum].to_xarray().assign_coords(
+                {'time': dt.datetime.strptime(datum, '%Y-%m-%d')}).expand_dims('time').rename('cum')
+            a = xr.concat([a, b], dim='time')
+        #
+        nc = nc.assign_coords({'time': a.time.values})
+        nc['cum'] = a
     # but values can be missing! so...:
     x_min, x_max = float(nc.lon.min()), float(nc.lon.max())
     y_min, y_max = float(nc.lat.min()), float(nc.lat.max())
@@ -741,8 +745,13 @@ def df2nc(df, outncfile=None, resol=0.0025, extracols=[], compressnc=True):
     #
     # Link the CRS to your data variable(s)
     for varn in ['vel', 'coh', 'cum']+extracols:
-        nc[varn].attrs['grid_mapping'] = 'crs'
+        if varn in nc:
+            nc[varn].attrs['grid_mapping'] = 'crs'
     #
+    if not dates:
+        if outncfile:
+            nc.to_netcdf(outncfile)
+        return nc
     if compressnc:
         # compress it and store as netcdf
         encode = {'vel': {'zlib': True, 'complevel': 9},
