@@ -493,8 +493,8 @@ def cumcube_remove_from_tifs(cumxr, tifdir = 'GEOC.EPOCHS', ext='geo.iono.code.t
                 # reflon, reflat = cumxr.attrs['ref_lon'], cumxr.attrs['ref_lat']
             if reflon:
                 extepoch = extepoch - extepoch.sel(lon=reflon, lat=reflat, method='nearest') # could be done better though
-            else:
-                extepoch = extepoch - extepoch.mean(skipna=True)
+            # else:
+            #    extepoch = extepoch - extepoch.mean(skipna=True)
         except Exception as e:
             print(f'\n\r WARNING: failed to load correction for epoch {epoch}: {str(e)}')
             error_log.append(extif)
