@@ -1689,6 +1689,11 @@ def get_ml_hgt(hgtfile, ml=1, cliparea_geo = None):
     return hgt
 
 
+def multilook_xrda(xrda_cpx, ml = 10, coords = ('lon', 'lat')):
+    bagcpx = xrda_cpx.where(xrda_cpx != 0).coarsen({coords[0]: ml, coords[1]: ml}, boundary='trim')
+    return bagcpx.sum() / bagcpx.count()
+
+
 def multilook_normalised(ifg, ml = 10, tmpdir = os.getcwd(), hgtcorr = True,
         pre_detrend = True, prev_ramp = None, thres_pxcount = None, keep_coh_debug = True):
     """Multilooking function that does much more.
