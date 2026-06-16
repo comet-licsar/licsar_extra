@@ -2280,9 +2280,14 @@ def interpolate_nans_pyinterp_phase(xrda):
 
 
 def interpolate_nans_pyinterp(xrda):
-    grid = pyinterp.backends.xarray.Grid2D(xrda, geodetic=False) #, increasing_axes=True)
-    has_converged, filled = pyinterp.fill.gauss_seidel(grid)
-    xrda.values=filled.T
+    try:
+        # older version of pyinterp
+        grid = pyinterp.backends.xarray.Grid2D(xrda, geodetic=False) #, increasing_axes=True)
+        has_converged, filled = pyinterp.fill.gauss_seidel(grid)
+        xrda.values=filled.T
+    except:
+        # pyinterp > 2026.06
+        iterations, residual = pyinterp.fill.gauss_seidel(xrda.values) # this will directly fill the xrda.values!
     return xrda
 
 
