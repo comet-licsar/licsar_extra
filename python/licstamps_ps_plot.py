@@ -8,6 +8,8 @@
 #
 ################################################################################
 
+print('WARNING - not used anymore - updating only licstamps now..')
+
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.linalg import lstsq
