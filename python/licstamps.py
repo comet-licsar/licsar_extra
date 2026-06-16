@@ -29,7 +29,7 @@ def get_height_wrt_dem():
 
 
 def export_ps_to_csv(outfile, correction_flag=None, use_detrend_for_coher=True):
-
+    ''' for currection flag, just use standard stamps flags.. e.g. 'dmos' if you want u-dmos '''
     ps = load_ps_data()
     lambda_ = getparm("lambda")[0]
 

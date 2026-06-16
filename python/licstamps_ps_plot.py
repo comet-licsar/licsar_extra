@@ -225,6 +225,63 @@ def dispatch_value_type(ps, value_type, ref_ifg, ifg_list):
         units = "rad"
 
         return ph_all, fig_name, units, ref_ps
+    if value_type == "u-dms":
+        # ---- load data ----
+        phuw = loadmat("phuw2.mat", squeeze_me=True)
+        scla = loadmat("scla2.mat", squeeze_me=True)
+        scn = loadmat("scn2.mat", squeeze_me=True)
+
+        if "ph_uw" not in phuw:
+            raise KeyError("ph_uw missing from phuw2.mat")
+        if "ph_scla" not in scla or "C_ps_uw" not in scla:
+            raise KeyError("Required fields missing from scla2.mat")
+
+        # ---- subtract DEM error and master atmosphere ----
+        ph_all = (
+            phuw["ph_uw"]
+            - scn['ph_scn_slave']
+            - scla["ph_scla"]
+            - scla["C_ps_uw"][:, None]
+        )
+
+        # ---- zero master IFG ----
+        ph_all[:, ps["master_ix"]] = 0.0
+
+        ref_ps = ps_setref(ps)
+        fig_name = "u-dms"
+        units = "rad"
+
+        return ph_all, fig_name, units, ref_ps
+    if value_type == "u-dmos":
+        # ---- load data ----
+        phuw = loadmat("phuw2.mat", squeeze_me=True)
+        scla = loadmat("scla2.mat", squeeze_me=True)
+        scn = loadmat("scn2.mat", squeeze_me=True)
+
+        if "ph_uw" not in phuw:
+            raise KeyError("ph_uw missing from phuw2.mat")
+        if "ph_scla" not in scla or "C_ps_uw" not in scla:
+            raise KeyError("Required fields missing from scla2.mat")
+
+        # ---- subtract DEM error and master atmosphere ----
+        ph_all = (
+            phuw["ph_uw"]
+            - scn['ph_scn_slave']
+            - scla["ph_scla"]
+            - scla["C_ps_uw"][:, None]
+        )
+
+        # ---- deramp ----
+        ph_all, ph_ramp = ps_deramp(ps, ph_all)
+
+        # ---- zero master IFG ----
+        ph_all[:, ps["master_ix"]] = 0.0
+
+        ref_ps = ps_setref(ps)
+        fig_name = "u-dmos"
+        units = "rad"
+
+        return ph_all, fig_name, units, ref_ps
     # ============================================================
     # VELOCITY (v) – SM only
     # ============================================================
