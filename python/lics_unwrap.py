@@ -2036,7 +2036,7 @@ def load_from_tifs(phatif, cohtif, magtif = None, landmask_tif = None, cliparea_
             inmask.values = landmask.values * inmask.values
     if checkfiltcoh:
         filtcoh = cohtif.replace('geo.cc.tif', 'geo.filt.cc.tif')
-        if os.path.exists(filtcoh):
+        if os.path.exists(filtcoh) and filtcoh.endswith('filt.cc.tif'):
             filtcoh = load_tif2xr(filtcoh)
             filtcoh_thres=0.45
             print('filt.cc file found - using it for masking (using thres of ' + str(filtcoh_thres) + ')')

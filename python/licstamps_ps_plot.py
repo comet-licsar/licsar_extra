@@ -10,7 +10,6 @@
 
 import numpy as np
 import matplotlib.pyplot as plt
-import numpy as np
 from scipy.linalg import lstsq
 from scipy.io import loadmat
 from licstamps import *

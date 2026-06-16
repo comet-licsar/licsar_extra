@@ -17,6 +17,7 @@ import pandas as pd
 from scipy.signal import detrend
 from scipy.io import loadmat, savemat
 from scipy.linalg import lstsq
+from licstamps_ps_plot import *
 
 def get_height_wrt_dem():
     scla = loadmat("scla2.mat", squeeze_me=True)
