@@ -292,9 +292,10 @@ def filter_tureq(intif, thres_m = 5):
 
 ml10=process_ifg_core(ifg, tmpdir = 'bagrr', ml = 10, fillby = 'nearest',smooth = False, goldstein = True, lowpass =False, specmag = True); ml10.unw.plot(); plt.show()
 '''
-def load_rngoffsets_as_prevest(rngtif, thres_m = 9, golditer = 3):
+def load_rngoffsets_as_prevest(rngtif, thres_m = 9, golditer = 3, is_azi = False, dfDC = None):
     """Loads the range offsets result in the form to be used as prevest
-    
+    (can use azi offs if is_azi, but best to add real dfDC - e.g. daz_lib_licsar.get_dfDC)
+
     Args:
         rngtif (str): path to the range offsets geotiff
     
@@ -321,8 +322,24 @@ def load_rngoffsets_as_prevest(rngtif, thres_m = 9, golditer = 3):
     #prevest.values = interpolate_nans(prevest.values, method='nearest')
     prevest = prevest.where(prevest !=0)  # maybe helps?
     # recalculate to radians
-    prevest=mm2rad_s1(prevest*1000)
+    if is_azi:
+        print('WARNING, using default dfDC - best to set yours')
+        if not dfDC:
+            dfDC = 4370
+        prevest = mm2rad_azimuth(prevest*1000, dfDC = dfDC)
+    else:
+        prevest=mm2rad_s1(prevest*1000)
     return prevest
+
+
+def mm2rad_azimuth(bovl_mm, dfDC = 4368.16):
+    PRF = 486.486
+    az_res = 14000
+    #
+    scaling = (az_res * PRF) / (dfDC * 2 * np.pi)
+    bovlpha = (-1) * bovl_mm / scaling
+    return bovlpha
+
 
 """
 import cv2
