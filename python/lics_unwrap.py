@@ -874,7 +874,7 @@ def process_ifg_core(ifg, tmpdir = os.getcwd(),
         ifg_ml['conncomp'].values = conncomp
         ifg_ml.unw.values=unw
         #ifg_ml['pha']=ifg_ml['filtpha']
-        if not rampit:  # we want to unwrap/add the resids ALWAYS.. unless this is cascade.
+        if (not rampit) and add_resid:  # 2026/06: although we want to unwrap/add the resids ALWAYS.. (unless this is cascade), i need to check if there are no extra errors
             # add residuals, using orig coh
             print('unwrapping residuals')
             cpx=pha2cpx(wrap2phase((ifg_ml['filtpha']-ifg_ml['origpha']).fillna(0).values)) # fillna probably not needed
