@@ -1255,6 +1255,9 @@ def process_ifg_core(ifg, tmpdir = os.getcwd(),
         #    os.remove(outtif+'.nc')
         #except:
         #    print('ERROR removing the nc file - something wrong with export')
+    # just to fix the wrong long_name var:
+    for x in ifg_ml:
+        ifg_ml[x].attrs['long_name'] = x
     return ifg_ml
 
 
