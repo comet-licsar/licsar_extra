@@ -943,6 +943,14 @@ def process_ifg_core(ifg, tmpdir = os.getcwd(),
         # keep smooth always on - much better...
         if smooth and not lowpass:
             ifg_ml['pha'] = ifg_ml.gauss_pha
+        tofillpha = ifg_ml.pha.where(ifg_ml.mask_full.where(ifg_ml.mask_extent == 1).fillna(1) == 1)
+        if use_pyinterp:
+            pha2unw = interpolate_nans_pyinterp_phase(tofillpha)
+        else:
+            pha2unw = gaussfill(tofillpha)
+        ifgml['pha'] = pha2unw
+        '''
+        #cpx = pha2cpx(pha2unw.values)
         #trying astropy approach now:
         print('filling through Gaussian kernel')
         kernel = Gaussian2DKernel(x_stddev=2)
@@ -964,6 +972,9 @@ def process_ifg_core(ifg, tmpdir = os.getcwd(),
         filledR = interpolate_replace_nans(tofillR.values, kernel)
         filledI = interpolate_replace_nans(tofillI.values, kernel)
         ifg_ml['pha'].values = np.angle(filledR + 1j*filledI)
+        print('gapfilling')
+        tofillpha = ifg_ml.pha.where(ifg_ml.mask_full.where(ifg_ml.mask_extent == 1).fillna(1) == 1)
+        
         #sometimes the whole area is not within gauss kernel
         while np.max(np.isnan(ifg_ml['pha'].values)):
             i = i+1
@@ -983,6 +994,7 @@ def process_ifg_core(ifg, tmpdir = os.getcwd(),
                 filledR = interpolate_replace_nans(tofillR.values, kernel)
                 filledI = interpolate_replace_nans(tofillI.values, kernel)
                 ifg_ml['pha'].values = np.angle(filledR + 1j*filledI)
+        '''
         #sometimes the whole area is not within gauss kernel - use NN for that:
         #if np.max(np.isnan(ifg_ml['pha'].values)):
         #    # no, this would be too far. using only filling by zero
