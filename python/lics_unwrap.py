@@ -948,7 +948,7 @@ def process_ifg_core(ifg, tmpdir = os.getcwd(),
             pha2unw = interpolate_nans_pyinterp_phase(tofillpha)
         else:
             pha2unw = gaussfill(tofillpha)
-        ifgml['pha'] = pha2unw
+        ifg_ml['pha'] = pha2unw
         '''
         #cpx = pha2cpx(pha2unw.values)
         #trying astropy approach now:
