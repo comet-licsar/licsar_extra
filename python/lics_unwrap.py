@@ -642,6 +642,9 @@ def process_ifg_core(ifg, tmpdir = os.getcwd(),
     #if goldstein:
     #    # let's check and replace goldstein for the gamma's version if available
     #    use_gamma = True
+    # gauss_seidel is too slow, thus use only with some multilooking, e.g. 5 at least:
+    if ml<5:
+        use_pyinterp = False
     if use_gamma and goldstein:
         # check for gamma commands
         if os.system('which adf2 >/dev/null 2>/dev/null') != 0:
