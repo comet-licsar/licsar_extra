@@ -329,7 +329,7 @@ def load_rngoffsets_as_prevest(rngtif, thres_m = 9, golditer = 3, is_azi = False
         print('WARNING, using default dfDC - best to set yours')
         if not dfDC:
             dfDC = 4370
-        prevest = mm2rad_azimuth(prevest*1000, dfDC = dfDC)
+        prevest = mm2rad_azimuth(prevest*1000*(-1), dfDC = dfDC)  # changing sign as assuming use for bovl ifg
     else:
         prevest=mm2rad_s1(prevest*1000)
     return prevest
