@@ -2094,7 +2094,9 @@ def load_from_tifs(phatif, cohtif, magtif = None, landmask_tif = None, cliparea_
     # just to clean from memory
     inpha=''
     incoh=''
-    ifg['mask_extent'] = ifg['pha'].where(ifg['pha'] == 0).fillna(1)
+    #ifg['mask_extent'] = ifg['pha'].where(ifg['pha'] == 0).fillna(1)
+    # but we convert 0 to nan, so...:
+    ifg['mask_extent'] = ~np.isnan(ifg['pha'])*1 # .where(ifg['pha'] == 0).fillna(1)
     if cliparea_geo:
         minclipx, maxclipx, minclipy, maxclipy = cliparea_geo.split('/')
         minclipx, maxclipx, minclipy, maxclipy = float(minclipx), float(maxclipx), float(minclipy), float(maxclipy)
@@ -3425,7 +3427,8 @@ def load_tif2xr(tif, cliparea_geo=None, tolonlat=True, fixnanzero = False):
         tif (string): path to geotiff
         cliparea_geo (string): use GMT/LiCSBAS string to identify area to clip, in geo-coordinates, as ``'lon1/lon2/lat1/lat2'``
         tolonlat (boolean): if True, return as lon lat coordinates
-    
+        fixnanzero (boolean): if True, it will set nan instead of zero
+
     Returns:
         xr.DataArray: loaded contents
     """
