@@ -38,7 +38,10 @@ from scipy import stats
 import scipy.signal as sps
 import scipy.linalg as spl
 from astropy.convolution import Gaussian2DKernel, interpolate_replace_nans, convolve_fft, convolve
-from sklearn.linear_model import HuberRegressor
+try:
+    from sklearn.linear_model import HuberRegressor
+except:
+    print('WARNING - no sklearn. Thats ok as long as you do not use hgtcorr correction')
 
 import time
 import matplotlib.pyplot as plt
