@@ -90,10 +90,10 @@ try:
     import pyinterp.backends.xarray
     # Module that handles the filling of undefined values.
     import pyinterp.fill
-    use_pyinterp = True
+    HAS_PYINTERP = True
 except ImportError:
-    print('WARNING, pyinterp not installed - rampit will contain gaps (may not influence your outputs)')
-    use_pyinterp = False
+    print('WARNING, pyinterp not installed - will use bit worse interpolator')
+    HAS_PYINTERP = False
 
 try:
     from LiCSAR_lib.LiCSAR_misc import *
@@ -643,8 +643,7 @@ def process_ifg_core(ifg, tmpdir = os.getcwd(),
     #    # let's check and replace goldstein for the gamma's version if available
     #    use_gamma = True
     # gauss_seidel is too slow, thus use only with some multilooking, e.g. 5 at least:
-    if ml<5:
-        use_pyinterp = False
+    use_pyinterp = HAS_PYINTERP and ml >= 5
     if use_gamma and goldstein:
         # check for gamma commands
         if os.system('which adf2 >/dev/null 2>/dev/null') != 0:
@@ -1196,7 +1195,7 @@ def process_ifg_core(ifg, tmpdir = os.getcwd(),
     #ifg_ml['unw'] = ifg_ml['unw'] - ifg_ml['unw'].median()
     if rampit:
         ifg_ml['unw_orig'] = ifg_ml['unw'].copy()
-        if use_pyinterp:
+        if HAS_PYINTERP:
             # much better solution!
             ifg_ml['unw'] = interpolate_nans_pyinterp(ifg_ml['unw'])
             ifg_ml['unw'] = ifg_ml['unw'].fillna(0).where(ifg_ml.mask_extent > 0)
