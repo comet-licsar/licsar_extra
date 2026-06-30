@@ -156,7 +156,7 @@ class UnwOptions(object):
             print(x[0]+': '+str(x[1]))
 '''
 def cascade_unwrap(frame, pair, downtoml = 1, procdir = os.getcwd(), finalgoldstein = True, use_gamma = False,
-                   only10 = True, smooth = False, thres=0.3, hgtcorr = True, defomax = 0.3,
+                   only10 = True, smooth = False, thres=0.3, hgtcorr = True, defomax = 0.3, finalfillby = 'gauss',
                    outtif = None, cliparea_geo = None, subtract_gacos = False, dolocal = False, do_landmask=True):
     """Main function to unwrap a geocoded LiCSAR interferogram using a cascade approach.
     
@@ -193,7 +193,8 @@ def cascade_unwrap(frame, pair, downtoml = 1, procdir = os.getcwd(), finalgoldst
     # 08/2025: updating parameters: defomax = 0, thres = 0.3
     if downtoml>1:
         print('WARNING, this will do first cascade in 10x the final factor - recommended value is downtoml=1')
-    ifg_mlc = process_ifg(frame, pair, procdir = procpairdir, ml = 10*downtoml, fillby = 'gauss',
+    fillby = 'gauss'  # 'gauss' is often better than using fillby = 'nearest',
+    ifg_mlc = process_ifg(frame, pair, procdir = procpairdir, ml = 10*downtoml, fillby = fillby,
             defomax = 0, thres = 0.3, add_resid = False, hgtcorr = hgtcorr, rampit=True,
             dolocal = dolocal, smooth=True, goldstein = False, specmag = False, do_landmask = do_landmask)
     if not only10:
@@ -201,13 +202,13 @@ def cascade_unwrap(frame, pair, downtoml = 1, procdir = os.getcwd(), finalgoldst
         for ii in [5, 3]:
             i=int(downtoml*ii)
             print('processing cascade of ML'+str(i))
-            ifg_mla = process_ifg(frame, pair, procdir = procpairdir, ml = i, fillby = 'gauss',
+            ifg_mla = process_ifg(frame, pair, procdir = procpairdir, ml = i, fillby = fillby,
                     prev_ramp = ifg_mlc['unw'], defomax = 0.5, add_resid = False, hgtcorr = hgtcorr, 
                     rampit=True,  dolocal = dolocal, goldstein = False, specmag = False,
                     smooth = True, thres = 0.2, do_landmask = do_landmask)
             ifg_mlc = ifg_mla.copy(deep=True)
     # now do the final step
-    ifg_ml = process_ifg(frame, pair, procdir = procpairdir, ml = downtoml, fillby = 'gauss',   # actually this is often better than using fillby = 'nearest',
+    ifg_ml = process_ifg(frame, pair, procdir = procpairdir, ml = downtoml, fillby = finalfillby,
                 prev_ramp = ifg_mlc['unw'], thres = thres, defomax = defomax, add_resid = True, 
                 hgtcorr = False, outtif=outtif, subtract_gacos = subtract_gacos, goldstein=finalgoldstein, use_gamma = use_gamma,
                 cliparea_geo = cliparea_geo,  dolocal = dolocal, smooth=smooth, specmag = False, do_landmask = do_landmask)
@@ -835,7 +836,7 @@ def process_ifg_core(ifg, tmpdir = os.getcwd(),
             if use_pyinterp:
                 pha2unw = interpolate_nans_pyinterp_phase(tofillpha)
             else:
-                pha2unw = gaussfill(tofillpha)
+                pha2unw = gaussfill(tofillpha, postfilter = False)
             cpx = pha2cpx(pha2unw.values)
         elif fillby == 'nearest':
             if 'lat' not in tofillpha.dims:
@@ -882,7 +883,7 @@ def process_ifg_core(ifg, tmpdir = os.getcwd(),
         if (not rampit) and add_resid:  # 2026/06: although we want to unwrap/add the resids ALWAYS.. (unless this is cascade), i need to check if there are no extra errors
             # add residuals, using orig coh
             print('unwrapping residuals')
-            cpx=pha2cpx(wrap2phase((ifg_ml['filtpha']-ifg_ml['origpha']).fillna(0).values)) # fillna probably not needed
+            cpx=pha2cpx(wrap2phase((ifg_ml['origpha'] - ifg_ml['filtpha']).fillna(0).values)) # fillna probably not needed
             coh=ifg_ml.coh.fillna(0.001).values
             # unw=unwrap_np(cpx,coh,defomax=0,tmpdir=tmpunwdir,mask=mask,deltemp=True)
             unw = unwrap_np(cpx, coh, defomax=0, tmpdir=tmpunwdir, deltemp=True)
@@ -952,7 +953,7 @@ def process_ifg_core(ifg, tmpdir = os.getcwd(),
         if use_pyinterp:
             pha2unw = interpolate_nans_pyinterp_phase(tofillpha)
         else:
-            pha2unw = gaussfill(tofillpha)
+            pha2unw = gaussfill(tofillpha, postfilter = False)
         ifg_ml['pha'] = pha2unw
         '''
         #cpx = pha2cpx(pha2unw.values)
@@ -1275,7 +1276,7 @@ def process_frame(frame = 'dummy', ml = 10, thres = 0.3,
             nproc = 1, dolocal = False, specmag = False, defomax = 0.3,
             use_amp_stab = False, use_coh_stab = False, use_amp_coh = False, keep_coh_debug = True,
             freq=5405000000, gacosdir = '../GACOS', do_landmask = True, prefer_unfiltered = True,
-            fillby = 'gauss', use_rg_offs = False):
+            fillby = 'nearest', use_rg_offs = False):
     """Main function to process whole LiCSAR frame (i.e. unwrap all available interferograms within the frame). Works only at JASMIN.
 
     Args:
@@ -1578,7 +1579,7 @@ def process_frame(frame = 'dummy', ml = 10, thres = 0.3,
                     procdir = os.path.join(os.getcwd()) #, pair)
                     if not dolocal:
                         if cascade:
-                            ifg_ml = cascade_unwrap(frame, pair, downtoml = ml, procdir = procdir, only10 = only10, 
+                            ifg_ml = cascade_unwrap(frame, pair, downtoml = ml, procdir = procdir, only10 = only10, finalfillby = fillby,
                                 outtif = outtif, subtract_gacos = subtract_gacos, smooth = smooth, use_gamma = use_gamma, hgtcorr = hgtcorr,
                                 cliparea_geo = cliparea_geo, thres = thres, finalgoldstein=goldstein, dolocal=dolocal, do_landmask=do_landmask)
                         else:
@@ -2265,7 +2266,7 @@ def load_ifg(frame, pair, unw=True, dolocal=False, mag=True,
     return ifg
 
 
-def gaussfill(dapha, sigma=2):
+def gaussfill(dapha, sigma=2, postfilter = False):
     #tempar_mag1 = np.ones_like(dapha)
     kernel = Gaussian2DKernel(x_stddev=sigma)
     #cpxarr = magpha2RI_array(tempar_mag1, dapha.values)
@@ -2288,8 +2289,9 @@ def gaussfill(dapha, sigma=2):
     # but i need to finally smooth it a bit
     #cpxarr = magpha2RI_array(tempar_mag1, dapha.values)
     cpxarr = pha2cpx(dapha.values)
-    gauss_cpx = filter_nan_gaussian_conserving(cpxarr, sigma=sigma*1.5, trunc=4)
-    dapha.values = np.angle(gauss_cpx)
+    if postfilter:
+        cpxarr = filter_nan_gaussian_conserving(cpxarr, sigma=sigma*1.5, trunc=4)
+    dapha.values = np.angle(cpxarr)
     return dapha
 
 
