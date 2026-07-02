@@ -260,6 +260,84 @@ def unwrap_with_rngoffs(phatif, cohtif, rngtif, outtif, cohthres=0.15):
     return d
 
 
+def filter_bovl_global(da, method='quadratic', mask_back = True):
+    ''' method either quadratic or linear'''
+    yy, xx = np.meshgrid(da[da.dims[0]], da[da.dims[1]], indexing="ij")
+    mask = np.isfinite(da.values)
+    if method == 'linear':
+        A = np.c_[
+            xx[mask],
+            yy[mask],
+            np.ones(mask.sum())
+        ]
+        coef, *_ = np.linalg.lstsq(A, da.values[mask], rcond=None)
+        out = xr.DataArray(
+            coef[0] * xx + coef[1] * yy + coef[2],
+            coords=da.coords,
+            dims=da.dims
+        )
+    if method == 'quadratic':
+        A = np.c_[
+            xx[mask] ** 2,
+            yy[mask] ** 2,
+            xx[mask] * yy[mask],
+            xx[mask],
+            yy[mask],
+            np.ones(mask.sum())
+        ]
+        coef, *_ = np.linalg.lstsq(A, da.values[mask], rcond=None)
+        out = xr.DataArray(
+            coef[0] * xx ** 2
+            + coef[1] * yy ** 2
+            + coef[2] * xx * yy
+            + coef[3] * xx
+            + coef[4] * yy
+            + coef[5],
+            coords=da.coords,
+            dims=da.dims
+        )
+    else:
+        print('only linear or quadratic method are allowed')
+        return False
+    if mask_back:
+        out = out.where(~np.isnan(da))
+    return out
+
+
+def filter_savgol2d_xr(da, window_length=51, polyorder=2):
+    ''' true Savitzky–Golay filter (helped by Copilot..but seems not working well..)'''
+    mask = np.isfinite(da.values)
+    if np.isnan(da).count()>0:
+        xrda = da.copy()
+        _ = interpolate_nans_pyinterp(xrda)
+        da = xrda
+    from scipy.signal import savgol_filter
+    arr = da.values
+    # First smooth rows
+    arr = savgol_filter(
+        arr,
+        window_length=window_length,
+        polyorder=polyorder,
+        axis=0,
+        mode="interp"
+    )
+    # Then smooth columns
+    arr = savgol_filter(
+        arr,
+        window_length=window_length,
+        polyorder=polyorder,
+        axis=1,
+        mode="interp"
+    )
+    out = xr.DataArray(
+        arr,
+        coords=da.coords,
+        dims=da.dims,
+        attrs=da.attrs
+    )
+    return out.where(mask)
+
+
 def filter_gold_float(intif, thres_m = 5):
     redfac = thres_m/np.pi
     ml=10
@@ -343,6 +421,41 @@ def mm2rad_azimuth(bovl_mm, dfDC = 4368.16):
     scaling = (az_res * PRF) / (dfDC * 2 * np.pi)
     bovlpha = bovl_mm / scaling
     return bovlpha
+
+
+def load_vector2grid(geojsonfile, gridxr, all_touched=True):
+    ''' This will load a geojson file and convert to grid compatible with gridxr (see load_tif2xr)
+    (it worked well for Myanmar unw task, loading the fault in geojson)
+
+    Args:
+        geojsonfile: str
+        gridxr: xr.DataArray
+        all_touched: boolean - make False if too much area is burned
+    Returns:
+        xr.DataArray
+    '''
+    import geopandas as gpd
+    vec = gpd.read_file(geojsonfile)
+    a = gridxr
+    # burning solution by Copilot
+    from rasterio.features import rasterize
+    import numpy as np
+    import xarray as xr
+    shapes = [(geom, 1) for geom in vec.geometry]
+    mask = rasterize(
+        shapes=shapes,
+        out_shape=a.shape,
+        transform=a.rio.transform(),
+        fill=0,
+        dtype=np.uint8,
+        all_touched=all_touched
+    )
+    burned = xr.DataArray(
+        mask,
+        coords=a.coords,
+        dims=a.dims,
+    )
+    return burned
 
 
 """
@@ -2057,10 +2170,18 @@ def load_from_nparrays(inpha,incoh,maskthres = 0.05):
     #ifg['mask'] = ifg['mask_extent']
     return ifg
 
+def load_from_xrs(phaxr, cohxr, cliparea_geo = None):
+    ''' Loads pha, coh xr.DataArrays to datacube, optionally with (same size) mask'''
+    ifg = load_from_tifs(phaxr, cohxr, checkfiltcoh=False, inputs_are_xrs = True, cliparea_geo = cliparea_geo)
+    return ifg
 
-def load_from_tifs(phatif, cohtif, magtif = None, landmask_tif = None, cliparea_geo = None, checkfiltcoh=True):
-    inpha = load_tif2xr(phatif, fixnanzero=True)
-    incoh = load_tif2xr(cohtif)
+def load_from_tifs(phatif, cohtif, magtif = None, landmask_tif = None, cliparea_geo = None, checkfiltcoh=True, inputs_are_xrs = False):
+    if inputs_are_xrs:
+        inpha = phatif
+        incoh = cohtif
+    else:
+        inpha = load_tif2xr(phatif, fixnanzero=True)
+        incoh = load_tif2xr(cohtif)
     if incoh.max() > 2:
         incoh.values = incoh.values/255
     if inpha.max() > 4:
@@ -2734,7 +2855,6 @@ export_xr2tif(ifg['unw_azifixed'], outname+'.tif')
 
 # let's try unwrap per conncomp
 azioffs = load_tif2xr(azitif)
-azioffs = azioffs*(-1)
 azioffs = azioffs.where(azioffs != 0)  # maybe helps?
 dfDC = 4370
 azioffs = mm2rad_azimuth(azioffs * 1000, dfDC=dfDC)
@@ -2757,7 +2877,112 @@ ifg = process_ifg_pair(
      add_resid=True, 
      prevest=prevest)
 
+
+#### proper way:
+import shutil
+azioffs = load_tif2xr(azitif, fixnanzero=True)
+azioffs = mm2rad_azimuth(azioffs * 1000) #, dfDC=4370)
+bovlifg = load_tif2xr(bovltif)
+azioffs = azioffs.interp_like(bovlifg, method="nearest") # nearest?
+coh = load_tif2xr(cohtif)
+coh.values[coh.values>1] = 1 # this was an issue ...
+geojsonfile = 'myanmar_simple_fault.geojson'
+faultrst = load_vector2grid(geojsonfile, bovlifg) # this is 1 where there is bovl - need to set mask to zero there
+# create burst extent mask, and coh-based mask_full as well (not sure what will be better)
+mask_full = (coh>0.2)*1
+mask_full = (faultrst==0)*1 * mask_full
+mask = (coh>0)*1
+mask = (faultrst==0)*1 * mask
+# ok, now let's calc conncomp:
+concompxr = mask != 0
+concomp, ncomp = ndimage.label(concompxr)
+concompxr.values = concomp  # 78 components
+concompxr.attrs['long_name'] = 'connected components'
+# now unwrap each component separately, and add result to overall unwxr:
+unwxr = bovlifg.copy()*np.nan
+unwxr.attrs['long_name'] = 'unwrapped [rad]'
+azioffsf = azioffs.copy()*np.nan
+for comp in range(1, ncomp):    # 0 should be background (but is it so always?)
+    print(f'Component {comp}/{ncomp}')
+    selazi = azioffs.where(concompxr == comp).copy()
+    selpha = bovlifg.where(concompxr == comp).copy()
+    selcoh = coh.where(concompxr == comp).copy()
+    if selcoh.count() < 5: # drop small areas
+        continue
+    # clip to small area an unwrap it:
+    boundstr = get_valid_bounds(selpha)
+    selifg = load_from_xrs(selpha, selcoh, cliparea_geo = boundstr)
+    #######
+    #mask_cohthre = (selifg['coh']>0.2 * 1).copy()
+    #selifg['pha']=interpolate_nans_pyinterp_phase(selifg.pha.where(selifg.coh>0.2))
+    #selifg['coh']=interpolate_nans_pyinterp(selifg.coh)
+    #selifg['mask'] = selifg['mask']*0+1
+    #selifg['mask_extent'] = selifg['mask_extent']*0+1
+    #selifg['cpx'].values = magpha2RI_array(selifg.coh.values, selifg.pha.values)
+    #######
+    selazi = selazi.interp_like(selifg) #.copy() # or no need?
+    if selazi.count() < 5: # drop small areas
+        print('no azi off values above threshold - skipping')
+        continue
+    selazif = filter_bovl_global(selazi, method='quadratic') #, mask_back = False) # or
+    azioffsf = selazif.where(~np.isnan(selazi)).combine_first(azioffsf)
+    # now i can use selazi for prevest, although not sure if this is the best?
+    # prevest = None  # or:
+    prevest = selazif.copy()
+    with nostdout():
+        tmpdir='bagr'
+        if os.path.exists(tmpdir):
+            shutil.rmtree(tmpdir)
+        os.mkdir(tmpdir)
+        try:
+            selifg = process_ifg_core(selifg, ml = 1, fillby = 'gauss', thres = 0.2, tmpdir=tmpdir,
+                smooth = False, lowpass = False, goldstein = True, specmag = False,
+                defomax = 1.2, hgtcorr = False, gacoscorr = False, pre_detrend = False,
+                cliparea_geo = None, outtif = None, prevest = prevest, 
+                add_resid = True,  rampit=False, subtract_gacos = False,
+                spatialmask_km = 2.0)
+            selifg2 = selifg.where(mask_cohthre==1)
+        except:
+            print('some error')
+    if not 'unw' in selifg:
+        print('some error in unwrapping')
+        continue
+    seldif = selifg['unw'] - selazi
+    print(f'overall diff: {float(seldif.median())}')
+    unwxr = (selifg['unw']-seldif.median()).combine_first(unwxr)
+
+
+export_xr2tif(unwxr, 'unwsep.mask.02.tif')
+export_xr2tif(unwxr, 'unwsep.mask.02.tif')
+# selazi = filter_savgol2d_xr(selazi, window_length=51, polyorder=2)
+
+
 '''
+def get_valid_bounds(gridxr, return_string = True):
+    ''' This will return either lon1/lon2/lat1/lat2 string or min/max lon/lat numbers'''
+    mask = gridxr.notnull()
+    lons = gridxr['lon'].where(mask.any("lat"), drop=True)
+    lats = gridxr['lat'].where(mask.any("lon"), drop=True)
+    minlon, maxlon = lons.min().item(), lons.max().item()
+    minlat, maxlat = lats.min().item(), lats.max().item()
+    if return_string:
+        return f"{minlon}/{maxlon}/{minlat}/{maxlat}"
+    else:
+        return minlon, maxlon, minlat, maxlat
+
+
+def clip2valid(gridxr):
+    ''' Helper function to clip to smaller region'''
+    mask = gridxr.notnull()
+    lons = gridxr['lon'].where(mask.any("lat"), drop=True)
+    lats = gridxr['lat'].where(mask.any("lon"), drop=True)
+    #
+    clipped = gridxr.sel(
+        lon=slice(lons.min().item(), lons.max().item()),
+        lat=slice(lats.max().item(), lats.min().item())
+    )
+    return clipped
+
 def bovl_unwrap(bovltif, cohtif, ml=1, maskname = 'mask_full', azitif = 'azis/inrad.tif', azi_is_in_rad = True):
     if azitif:
         azioffs = load_tif2xr(azitif)
@@ -2972,7 +3197,7 @@ def create_preview(infile, ftype = 'unwrapped'):
     os.system('source {0}; {1} {2} {3}'.format(tosource, command, infile, extra))
 
 
-def make_snaphu_conf(sdir, defomax = 1.2):
+def make_snaphu_conf(sdir, defomax = 1.2, initmethod='MCF'):
     """Creates snaphu configuration file
     
     Args:
@@ -2988,6 +3213,7 @@ def make_snaphu_conf(sdir, defomax = 1.2):
             'OUTFILEFORMAT FLOAT_DATA\n',
             'ESTFILEFORMAT FLOAT_DATA\n',
             'DEFOMAX_CYCLE '+str(defomax)+'\n',
+            'INITMETHOD	'+initmethod+'\n',
             'RMTMPTILE TRUE\n')
     snaphuconffile = os.path.join(sdir,'snaphu.conf')
     with open(snaphuconffile,'w') as f:
