@@ -330,7 +330,7 @@ def load_rngoffsets_as_prevest(rngtif, thres_m = 9, golditer = 3, is_azi = False
         print('WARNING, using default dfDC - best to set yours')
         if not dfDC:
             dfDC = 4370
-        prevest = mm2rad_azimuth(prevest*1000*(-1), dfDC = dfDC)  # changing sign as assuming use for bovl ifg
+        prevest = mm2rad_azimuth(prevest*1000, dfDC = dfDC)
     else:
         prevest=mm2rad_s1(prevest*1000)
     return prevest
@@ -2713,6 +2713,51 @@ def remove_islands(npa, pixelsno = 50):
         if numofpixels < pixelsno:
             npa[islands==i] = np.nan
     return npa
+
+# mask - as just 'mask' seems ok!
+def bovl_unwrap(bovltif, cohtif, ml=1, maskname = 'mask_full', azitif = 'azis/inrad.tif', azi_is_in_rad = True):
+    if azitif:
+        azioffs = load_tif2xr(azitif)
+    print('WARNING - TEMPORARY SIGN CHANGE - CHANGE IT BACK PLS!!!')
+    azioffs = azioffs*(-1)
+    if not azi_is_in_rad:
+        azioffs = azioffs.where(azioffs != 0)  # maybe helps?
+        # recalculate to radians
+        print('WARNING, using default dfDC - best to set yours')
+        dfDC = 4370
+        azioffs = mm2rad_azimuth(azioffs * 1000, dfDC=dfDC)
+    ifg = process_ifg_pair(
+     bovltif,
+     cohtif,
+     ml=ml,
+     fillby='nearest',
+     thres=0.2,
+     smooth=False,
+     lowpass=False,
+     goldstein=True,
+     specmag=False,
+     spatialmask_km=2.0,
+     defomax=0.6,
+     gacoscorr=False,
+     pre_detrend=False,
+     add_resid=False )
+    azioffs = azioffs.interp_like(ifg.pha) # just in case..
+    concomask = ifg[maskname] != 0
+    concomp, ncomp = ndimage.label(concomask)
+    ifg['concomp'] = ifg.conncomp.copy()
+    ifg.concomp.values = concomp
+    ifg['unw_azifixed'] = ifg['unw'].fillna(0)*0
+    for comp in range(ncomp):
+        selazi = azioffs.where(ifg.concomp == comp)
+        selunw = ifg.unw.where(ifg.concomp == comp)
+        seldif = selunw - selazi
+        # print('Shifting by ...seldif.mean())
+        ifg['unw_azifixed'] = ifg['unw_azifixed'].fillna(0)+(selunw-seldif.median()).fillna(0)
+    print('WARNING 2: changed also unw - please remove this after the GAFA text')
+    ifg['unw_azifixed'] = ifg['unw_azifixed']*(-1)
+    ifg['unw'] = ifg['unw'] * (-1)
+    return ifg
+
 
 # FILTERING - experiments with rubber-sheet resampling - the filter below is better than median as it keeps 'edges' (e.g. faults)
 # perhaps winsize=64 and bins=10 is ... 'optimal', but must be better tested (i check few options now)
