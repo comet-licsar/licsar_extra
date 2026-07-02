@@ -341,7 +341,7 @@ def mm2rad_azimuth(bovl_mm, dfDC = 4368.16):
     az_res = 14000
     #
     scaling = (az_res * PRF) / (dfDC * 2 * np.pi)
-    bovlpha = (-1) * bovl_mm / scaling
+    bovlpha = bovl_mm / scaling
     return bovlpha
 
 
@@ -2715,11 +2715,54 @@ def remove_islands(npa, pixelsno = 50):
     return npa
 
 # mask - as just 'mask' seems ok!
+'''
+# preview using pha_ml that was 3x3-multilooked
+from lics_unwrap import *
+bovltif = 'mai_143A_20230327_20230402_nn.pha_ml.tif'
+cohtif = 'mai_143A_20230327_20230402_nn.coh_ml.tif'
+ml = 1
+maskname = 'mask' # but best to cut conncomps by the faultline....
+outname = 'azi_fix_cc_per_bovl'
+maskname = 'mask_full' # but best to cut conncomps by the faultline....
+outname = 'azi_fix_cc_fullmasked'
+azitif = 'azioffs_orig.tif'
+azi_is_in_rad = False
+ifg = bovl_unwrap(bovltif, cohtif, ml, maskname, azitif, azi_is_in_rad)
+ifg = ifg.drop_vars('cpx')
+ifg.to_netcdf(outname+'.nc')
+export_xr2tif(ifg['unw_azifixed'], outname+'.tif')
+
+# let's try unwrap per conncomp
+azioffs = load_tif2xr(azitif)
+azioffs = azioffs*(-1)
+azioffs = azioffs.where(azioffs != 0)  # maybe helps?
+dfDC = 4370
+azioffs = mm2rad_azimuth(azioffs * 1000, dfDC=dfDC)
+# one more try with prevest:
+prevest=azioffs
+ifg = process_ifg_pair(
+     bovltif,
+     cohtif,
+     ml=ml,
+     fillby='nearest',
+     thres=0.2,
+     smooth=False,
+     lowpass=False,
+     goldstein=True,
+     specmag=False,
+     spatialmask_km=2.0,
+     defomax=0.6,
+     gacoscorr=False,
+     pre_detrend=False,
+     add_resid=True, 
+     prevest=prevest)
+
+'''
 def bovl_unwrap(bovltif, cohtif, ml=1, maskname = 'mask_full', azitif = 'azis/inrad.tif', azi_is_in_rad = True):
     if azitif:
         azioffs = load_tif2xr(azitif)
-    print('WARNING - TEMPORARY SIGN CHANGE - CHANGE IT BACK PLS!!!')
-    azioffs = azioffs*(-1)
+    # print('WARNING - TEMPORARY SIGN CHANGE - CHANGE IT BACK PLS!!!')
+    # azioffs = azioffs*(-1)
     if not azi_is_in_rad:
         azioffs = azioffs.where(azioffs != 0)  # maybe helps?
         # recalculate to radians
@@ -2753,9 +2796,9 @@ def bovl_unwrap(bovltif, cohtif, ml=1, maskname = 'mask_full', azitif = 'azis/in
         seldif = selunw - selazi
         # print('Shifting by ...seldif.mean())
         ifg['unw_azifixed'] = ifg['unw_azifixed'].fillna(0)+(selunw-seldif.median()).fillna(0)
-    print('WARNING 2: changed also unw - please remove this after the GAFA text')
-    ifg['unw_azifixed'] = ifg['unw_azifixed']*(-1)
-    ifg['unw'] = ifg['unw'] * (-1)
+    # print('WARNING 2: changed also unw - please remove this after the GAFA text')
+    # ifg['unw_azifixed'] = ifg['unw_azifixed']*(-1)
+    # ifg['unw'] = ifg['unw'] * (-1)
     return ifg
 
 
