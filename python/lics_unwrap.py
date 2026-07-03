@@ -2839,6 +2839,9 @@ def remove_islands(npa, pixelsno = 50):
 '''
 # preview using pha_ml that was 3x3-multilooked
 from lics_unwrap import *
+import shutil
+import matplotlib.pyplot as plt
+
 bovltif = 'mai_143A_20230327_20230402_nn.pha_ml.tif'
 cohtif = 'mai_143A_20230327_20230402_nn.coh_ml.tif'
 ml = 1
@@ -2880,6 +2883,7 @@ ifg = process_ifg_pair(
 
 #### proper way:
 import shutil
+import lics_vis as lv
 azioffs = load_tif2xr(azitif, fixnanzero=True)
 azioffs = mm2rad_azimuth(azioffs * 1000) #, dfDC=4370)
 bovlifg = load_tif2xr(bovltif)
@@ -2937,11 +2941,11 @@ for comp in range(1, ncomp):    # 0 should be background (but is it so always?)
         try:
             selifg = process_ifg_core(selifg, ml = 1, fillby = 'gauss', thres = 0.2, tmpdir=tmpdir,
                 smooth = False, lowpass = False, goldstein = True, specmag = False,
-                defomax = 1.2, hgtcorr = False, gacoscorr = False, pre_detrend = False,
+                defomax = 1.4, hgtcorr = False, gacoscorr = False, pre_detrend = False,
                 cliparea_geo = None, outtif = None, prevest = prevest, 
                 add_resid = True,  rampit=False, subtract_gacos = False,
                 spatialmask_km = 2.0)
-            selifg2 = selifg.where(mask_cohthre==1)
+            selifg2 = selifg.where(mask_full==1)
         except:
             print('some error')
     if not 'unw' in selifg:
@@ -2963,44 +2967,73 @@ comp=40
 selazi = azioffs.where(concompxr == comp).copy()
 selpha = bovlifg.where(concompxr == comp).copy()
 selcoh = coh.where(concompxr == comp).copy()
-if selcoh.count() < 5: # drop small areas
-    continue
 # clip to small area an unwrap it:
 boundstr = get_valid_bounds(selpha)
 selifg = load_from_xrs(selpha, selcoh, cliparea_geo = boundstr)
 #######
-#mask_cohthre = (selifg['coh']>0.2 * 1).copy()
-#selifg['pha']=interpolate_nans_pyinterp_phase(selifg.pha.where(selifg.coh>0.2))
+cohthre = 0.35
+# mask_cohthre = (selifg['coh']>cohthre * 1).copy()
+mask_extent = (~np.isnan(selifg['coh']) * 1).copy()
+origpha = (selifg.pha*mask_extent).copy()
+phadis = selifg.pha.where(selifg.coh>cohthre).copy()
+phadis.values = remove_islands(phadis.values, 7)
+mask_cohthre = (~np.isnan(phadis) * 1).copy()
+selifg['pha']=interpolate_nans_pyinterp_phase(phadis) # yes, takes time, but useful
 #selifg['coh']=interpolate_nans_pyinterp(selifg.coh)
-#selifg['mask'] = selifg['mask']*0+1
-#selifg['mask_extent'] = selifg['mask_extent']*0+1
-#selifg['cpx'].values = magpha2RI_array(selifg.coh.values, selifg.pha.values)
+selifg['coh']=selifg['coh'].fillna(0.01)
+selifg['mask'] = selifg['mask']*0+1
+selifg['mask_extent'] = selifg['mask_extent']*0+1
+selifg['cpx'].values = magpha2RI_array(selifg.coh.values, selifg.pha.values)
+# lv.plot3(selifg.pha, selifg.coh, selifg0.unw.where(selifg.coh>0.35))
 #######
-selazi = selazi.interp_like(selifg) #.copy() # or no need?
-if selazi.count() < 5: # drop small areas
-    print('no azi off values above threshold - skipping')
-    continue
+selazi = azioffs.interp_like(selifg) #.copy() # or no need?
 selazif = filter_bovl_global(selazi, method='quadratic') #, mask_back = False) # or
-azioffsf = selazif.where(~np.isnan(selazi)).combine_first(azioffsf)
 # now i can use selazi for prevest, although not sure if this is the best?
 # prevest = None  # or:
 prevest = selazif.copy()
-with nostdout():
-    tmpdir='bagr'
-    if os.path.exists(tmpdir):
-        shutil.rmtree(tmpdir)
-    os.mkdir(tmpdir)
-    try:
-        selifg = process_ifg_core(selifg, ml = 1, fillby = 'gauss', thres = 0.2, tmpdir=tmpdir,
-            smooth = False, lowpass = False, goldstein = True, specmag = False,
-            defomax = 1.2, hgtcorr = False, gacoscorr = False, pre_detrend = False,
-            cliparea_geo = None, outtif = None, prevest = prevest, 
-            add_resid = True,  rampit=False, subtract_gacos = False,
-            spatialmask_km = 2.0)
-        selifg2 = selifg.where(mask_cohthre==1)
-    except:
-        print('some error')
 
+tmpdir='bagr'
+if os.path.exists(tmpdir):
+    shutil.rmtree(tmpdir)
+
+os.mkdir(tmpdir)
+try:
+    selifg = process_ifg_core(selifg, ml = 1, fillby = 'gauss', thres = 0, tmpdir=tmpdir,
+        smooth = False, lowpass = False, goldstein = True, specmag = False,
+        defomax = 1.2, hgtcorr = False, gacoscorr = False, pre_detrend = False,
+        cliparea_geo = None, outtif = None, prevest = prevest, 
+        add_resid = False,  rampit=False, subtract_gacos = False,
+        spatialmask_km = 0)
+    selifg = selifg.where(mask_extent==1)
+    selifg2 = selifg.where(mask_cohthre==1)
+except:
+    print('some error')
+
+seldif = selifg2['unw'] - selazi  # these are good values..
+print(f'overall diff: {float(seldif.median())}')
+# add resids (unwrap it?):
+cpx=pha2cpx(wrap2phase((origpha - wrap2phase(selifg['unw'])).fillna(0).values))
+coh = selifg.coh.fillna(0).values
+unwresid = unwrap_np(cpx, coh, defomax=0, deltemp=True)
+
+unwfull = selifg['unw']-seldif.median()
+unw = selifg2['unw']-seldif.median()
+unwfullresid = unwfull + unwresid # *mask_extent
+
+unwfullxr = (unwfull).combine_first(unwfullxr)
+unwfullresidxr = (unwfull).combine_first(unwfullresidxr)
+unwxr = (unw).combine_first(unwxr)
+
+
+
+ha = selifg['unw']-seldif.median()
+haa = selifg2['unw']-seldif.median()
+haaa = selazi
+lv.plot3(ha, haa, haaa)
+    
+lv.plot3(selifg.filtpha, selifg.unw, selifg.pha)
+lv.plot3(selifg0.filtpha, selifg0.unw, selifg0.pha)
+lv.plot3(selifg0.filtpha, selifg0.unw, selifg2.unw)
 '''
 def get_valid_bounds(gridxr, return_string = True):
     ''' This will return either lon1/lon2/lat1/lat2 string or min/max lon/lat numbers'''
@@ -3013,6 +3046,122 @@ def get_valid_bounds(gridxr, return_string = True):
         return f"{minlon}/{maxlon}/{minlat}/{maxlat}"
     else:
         return minlon, maxlon, minlat, maxlat
+
+
+
+def testbovl():
+    #### proper way:
+    import shutil
+    import lics_vis as lv
+    azioffs = load_tif2xr(azitif, fixnanzero=True)
+    azioffs = mm2rad_azimuth(azioffs * 1000)  # , dfDC=4370)
+    bovlifg = load_tif2xr(bovltif)
+    azioffs = azioffs.interp_like(bovlifg, method="nearest")  # nearest?
+    coh = load_tif2xr(cohtif)
+    coh.values[coh.values > 1] = 1  # this was an issue ...
+    geojsonfile = 'myanmar_simple_fault.geojson'
+    faultrst = load_vector2grid(geojsonfile, bovlifg)  # this is 1 where there is bovl - need to set mask to zero there
+    # create burst extent mask, and coh-based mask_full as well (not sure what will be better)
+    mask_full = (coh > 0.2) * 1
+    mask_full = (faultrst == 0) * 1 * mask_full
+    # ok, but i prefer using only mask_extent, so:
+    mask = (coh > 0) * 1
+    mask = (faultrst == 0) * 1 * mask
+    # ok, now let's calc conncomp:
+    concompxr = mask != 0
+    concomp, ncomp = ndimage.label(concompxr)
+    concompxr.values = concomp  # 78 components
+    concompxr.attrs['long_name'] = 'connected components'
+    # now unwrap each component separately, and add result to overall unwxr:
+    unwxr = bovlifg.copy() * np.nan
+    unwxr.attrs['long_name'] = 'unwrapped [rad]'
+    unwfullresidxr = unwxr.copy()
+    unwfullxr = unwxr.copy()
+    azioffsf = azioffs.copy() * np.nan
+    for comp in range(1, ncomp):  # 0 should be background (but is it so always?)
+        try:
+            print(f'Component {comp}/{ncomp - 1}')
+            selazi = azioffs.where(concompxr == comp).copy()
+            selpha = bovlifg.where(concompxr == comp).copy()
+            selcoh = coh.where(concompxr == comp).copy()
+            # clip to small area an unwrap it:
+            boundstr = get_valid_bounds(selpha)
+            selifg = load_from_xrs(selpha, selcoh, cliparea_geo=boundstr)
+            #######
+            cohthre = 0.35
+            # mask_cohthre = (selifg['coh']>cohthre * 1).copy()
+            mask_extent = (~np.isnan(selifg['coh']) * 1).copy()
+            origpha = (selifg.pha * mask_extent).copy()
+            phadis = selifg.pha.where(selifg.coh > cohthre).copy()
+            phadis.values = remove_islands(phadis.values, 7)
+            mask_cohthre = (~np.isnan(phadis) * 1).copy()
+            selifg['pha'] = interpolate_nans_pyinterp_phase(phadis)  # yes, takes time, but useful
+            # selifg['coh']=interpolate_nans_pyinterp(selifg.coh)
+            selifg['coh'] = selifg['coh'].fillna(0.01)
+            selifg['mask'] = selifg['mask'] * 0 + 1
+            selifg['mask_extent'] = selifg['mask_extent'] * 0 + 1
+            selifg['cpx'].values = magpha2RI_array(selifg.coh.values, selifg.pha.values)
+            # lv.plot3(selifg.pha, selifg.coh, selifg0.unw.where(selifg.coh>0.35))
+            #######
+            selazi = azioffs.interp_like(selifg)  # .copy() # or no need?
+            selazif = filter_bovl_global(selazi, method='quadratic')  # , mask_back = False) # or
+            azioffsf = selazif.where(mask_extent==1).combine_first(azioffsf)
+            unw = unwfullresid_masked_xr.interp_like(selifg, method='nearest') # this is just a clip
+            unw = unw.where(mask_extent==1)
+            seldif = unw - azioffsf
+            print(f'overall diff: {float(seldif.median())}')
+            unw = unw - seldif.median() # near it to the azioffsf
+            unwfullresid_masked_xr = unw.combine_first(unwfullresid_masked_xr)
+            #
+            #
+            # now i can use selazi for prevest, although not sure if this is the best?
+            # prevest = None  # or:
+            prevest = selazif.copy()
+            tmpdir = 'bagr'
+            if os.path.exists(tmpdir):
+                shutil.rmtree(tmpdir)
+            os.mkdir(tmpdir)
+            try:
+                selifg = process_ifg_core(selifg, ml=1, fillby='gauss', thres=0, tmpdir=tmpdir,
+                                          smooth=False, lowpass=False, goldstein=True, specmag=False,
+                                          defomax=1.2, hgtcorr=False, gacoscorr=False, pre_detrend=False,
+                                          cliparea_geo=None, outtif=None, prevest=prevest,
+                                          add_resid=False, rampit=False, subtract_gacos=False,
+                                          spatialmask_km=0)
+                selifg = selifg.where(mask_extent == 1)
+                selifg2 = selifg.where(mask_cohthre == 1)
+            except:
+                print('some error')
+            seldif = selifg2['unw'] - selazif  # these are good values..
+            print(f'overall diff: {float(seldif.median())}')
+            # add resids (unwrap it?):
+            cpx = pha2cpx(wrap2phase((origpha - wrap2phase(selifg['unw'])).fillna(0).values))
+            cohx = selifg.coh.fillna(0).values
+            unwresid = unwrap_np(cpx, cohx, defomax=0, deltemp=True)
+            unwfull = selifg['unw'] - seldif.median()
+            unw = selifg2['unw'] - seldif.median()
+            unwfullresid = unwfull + unwresid  # *mask_extent
+            unwfullxr = (unwfull).combine_first(unwfullxr)
+            unwfullresidxr = (unwfullresid).combine_first(unwfullresidxr)
+            unwxr = (unw).combine_first(unwxr)
+        except:
+            print('error ')
+            continue
+    #
+    export_xr2tif(azioffsf, 'state.07.azioffs_filt.tif')
+    resid = unwfullresidxr.copy()
+    resid.values = wrap2phase(unwfullresidxr - unwfullresidxr.median() - bovlifg)  # .fillna(0).values))
+    resid.values = wrap2phase(resid - resid.median())
+    export_xr2tif(resid, 'state.07.unwfullres.residpha.tif')
+    unwfullresidxr = unwfullresidxr - resid
+    unwfullresid_masked_xr = unwfullresidxr.where(coh>0.2)
+    export_xr2tif(unwfullresid_masked_xr, 'state.07.unwfullres.masked0.2.tif')
+    unwfullresid_masked_xr.values = remove_islands(unwfullresid_masked_xr.values, 9)
+    export_xr2tif(unwfullresid_masked_xr, 'state.07.unwfullres.masked0.2b.tif')
+    export_xr2tif(unwxr, 'state.07.unw.tif') #unwsep.mask.02.tif')
+    export_xr2tif(unwfullxr, 'state.07.unwfull.tif')  # unwsep.mask.02.tif')
+    export_xr2tif(unwfullresidxr, 'state.07.unwfullres.tif')  # unwsep.mask.02.tif')
+    # export_xr2tif(unwxr, 'unwsep.mask.02.bck.tif')
 
 
 def clip2valid(gridxr):
