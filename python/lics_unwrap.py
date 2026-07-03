@@ -2903,7 +2903,7 @@ unwxr = bovlifg.copy()*np.nan
 unwxr.attrs['long_name'] = 'unwrapped [rad]'
 azioffsf = azioffs.copy()*np.nan
 for comp in range(1, ncomp):    # 0 should be background (but is it so always?)
-    print(f'Component {comp}/{ncomp}')
+    print(f'Component {comp}/{ncomp-1}')
     selazi = azioffs.where(concompxr == comp).copy()
     selpha = bovlifg.where(concompxr == comp).copy()
     selcoh = coh.where(concompxr == comp).copy()
@@ -2953,9 +2953,53 @@ for comp in range(1, ncomp):    # 0 should be background (but is it so always?)
 
 
 export_xr2tif(unwxr, 'unwsep.mask.02.tif')
-export_xr2tif(unwxr, 'unwsep.mask.02.tif')
+export_xr2tif(unwxr, 'unwsep.mask.02.bck.tif')
 # selazi = filter_savgol2d_xr(selazi, window_length=51, polyorder=2)
 
+
+########## TEST FOR A COMP
+
+comp=40
+selazi = azioffs.where(concompxr == comp).copy()
+selpha = bovlifg.where(concompxr == comp).copy()
+selcoh = coh.where(concompxr == comp).copy()
+if selcoh.count() < 5: # drop small areas
+    continue
+# clip to small area an unwrap it:
+boundstr = get_valid_bounds(selpha)
+selifg = load_from_xrs(selpha, selcoh, cliparea_geo = boundstr)
+#######
+#mask_cohthre = (selifg['coh']>0.2 * 1).copy()
+#selifg['pha']=interpolate_nans_pyinterp_phase(selifg.pha.where(selifg.coh>0.2))
+#selifg['coh']=interpolate_nans_pyinterp(selifg.coh)
+#selifg['mask'] = selifg['mask']*0+1
+#selifg['mask_extent'] = selifg['mask_extent']*0+1
+#selifg['cpx'].values = magpha2RI_array(selifg.coh.values, selifg.pha.values)
+#######
+selazi = selazi.interp_like(selifg) #.copy() # or no need?
+if selazi.count() < 5: # drop small areas
+    print('no azi off values above threshold - skipping')
+    continue
+selazif = filter_bovl_global(selazi, method='quadratic') #, mask_back = False) # or
+azioffsf = selazif.where(~np.isnan(selazi)).combine_first(azioffsf)
+# now i can use selazi for prevest, although not sure if this is the best?
+# prevest = None  # or:
+prevest = selazif.copy()
+with nostdout():
+    tmpdir='bagr'
+    if os.path.exists(tmpdir):
+        shutil.rmtree(tmpdir)
+    os.mkdir(tmpdir)
+    try:
+        selifg = process_ifg_core(selifg, ml = 1, fillby = 'gauss', thres = 0.2, tmpdir=tmpdir,
+            smooth = False, lowpass = False, goldstein = True, specmag = False,
+            defomax = 1.2, hgtcorr = False, gacoscorr = False, pre_detrend = False,
+            cliparea_geo = None, outtif = None, prevest = prevest, 
+            add_resid = True,  rampit=False, subtract_gacos = False,
+            spatialmask_km = 2.0)
+        selifg2 = selifg.where(mask_cohthre==1)
+    except:
+        print('some error')
 
 '''
 def get_valid_bounds(gridxr, return_string = True):
