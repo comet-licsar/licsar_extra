@@ -33,13 +33,11 @@ imgs = [np.angle(load_gdr(ifgs[0])[0]),
         np.angle(load_gdr(ifgs[2])[0]),]
 cmap = 'hsv'
 #backscatter
-imgs = [load_gdr(sigmas[0])[0],
-        load_gdr(sigmas[1])[0],
-        load_gdr(sigmas[2])[0]]
-cmap = 'gray'
+imgs = [10 * np.log10(np.maximum(load_gdr(sigmas[0])[0], 1e-10)),
+        10 * np.log10(np.maximum(load_gdr(sigmas[1])[0], 1e-10)),
+        10 * np.log10(np.maximum(load_gdr(sigmas[2])[0], 1e-10))]
+cmap = 'viridis'
 
-hs = [im.shape[0] for im in imgs]
-ws = [im.shape[1] for im in imgs]
 
 # Figure layout parameters (tweak if you want different margins/gaps)
 left, right = 0.08, 0.98
@@ -66,7 +64,7 @@ for i, im in enumerate(imgs):
 
     y = ax_y - gap
 
-
+plt.colorbar()
 plt.show()
 
 
