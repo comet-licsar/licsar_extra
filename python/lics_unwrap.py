@@ -436,20 +436,44 @@ def load_vector2grid(geojsonfile, gridxr, all_touched=True):
     '''
     import geopandas as gpd
     vec = gpd.read_file(geojsonfile)
-    a = gridxr
+    a = gridxr.copy()
+    a = a.rio.set_spatial_dims(
+        x_dim="lon",
+        y_dim="lat",
+        inplace=False
+    )
+    a = a.rio.write_crs("EPSG:4326", inplace=False)
     # burning solution by Copilot
     from rasterio.features import rasterize
     import numpy as np
     import xarray as xr
     shapes = [(geom, 1) for geom in vec.geometry]
+    #
+    from rasterio.transform import from_bounds
+    transform = from_bounds(
+        float(a.lon.min()),
+        float(a.lat.min()),
+        float(a.lon.max()),
+        float(a.lat.max()),
+        a.sizes["lon"],
+        a.sizes["lat"],
+    )
     mask = rasterize(
-        shapes=shapes,
-        out_shape=a.shape,
-        transform=a.rio.transform(),
+        shapes,
+        out_shape=(a.sizes["lat"], a.sizes["lon"]),
+        transform=transform,
         fill=0,
         dtype=np.uint8,
-        all_touched=all_touched
+        all_touched=all_touched,
     )
+    #mask = rasterize(
+    #    shapes=shapes,
+    #    out_shape=a.shape,
+    #    transform=a.rio.transform(),
+    #    fill=0,
+    #    dtype=np.uint8,
+    #    all_touched=all_touched
+    #)
     burned = xr.DataArray(
         mask,
         coords=a.coords,
@@ -3050,23 +3074,50 @@ def get_valid_bounds(gridxr, return_string = True):
 
 
 def testbovl():
+    from lics_unwrap import *
+    azitif = '021D_azi.tif'
+    bovltif = 'mai_021D_20230105_20230306_nn.pha.tif'
+    cohtif = 'mai_021D_20230105_20230306_nn.coh.tif'
+    geojsonfile = 'myanmar_simple_fault.geojson'
+    geojsonfile = 'fault_tr/simple_fault_2023-2-14.shp'  # both shp and geojson work ok
+    outstr = '021D_aos_unw_03_ml8'
+    concomp_use_fullmask = False # not best idea to enable this..
+    preml = None
+    preml = 5
+    preml = 8
+    use_cohlike = True
+    cohthre = 0.2
+    cohthre = 0.3 #5
+    cohthre = 0.5 # for cohlike.. (or 0.6 if preml==5)
     #### proper way:
     import shutil
     import lics_vis as lv
     azioffs = load_tif2xr(azitif, fixnanzero=True)
     azioffs = mm2rad_azimuth(azioffs * 1000)  # , dfDC=4370)
     bovlifg = load_tif2xr(bovltif)
-    azioffs = azioffs.interp_like(bovlifg, method="nearest")  # nearest?
     coh = load_tif2xr(cohtif)
     coh.values[coh.values > 1] = 1  # this was an issue ...
-    geojsonfile = 'myanmar_simple_fault.geojson'
+    if preml:
+        ifg = load_from_xrs(bovlifg, coh)
+        ifg = multilook_normalised(ifg, ml=preml, hgtcorr=False, pre_detrend=False)
+        if use_cohlike:
+            coh = ifg['cohlike'].copy()
+        else:
+            coh = ifg['coh'].copy()
+        bovlifg = ifg['pha'].copy()
+        ifg = None
+        #
+    azioffs = azioffs.interp_like(bovlifg, method="nearest")  # nearest?
     faultrst = load_vector2grid(geojsonfile, bovlifg)  # this is 1 where there is bovl - need to set mask to zero there
-    # create burst extent mask, and coh-based mask_full as well (not sure what will be better)
-    mask_full = (coh > 0.2) * 1
-    mask_full = (faultrst == 0) * 1 * mask_full
-    # ok, but i prefer using only mask_extent, so:
-    mask = (coh > 0) * 1
-    mask = (faultrst == 0) * 1 * mask
+    if concomp_use_fullmask:
+        # create burst extent mask, and coh-based mask_full as well (not sure what will be better)
+        mask = (coh > cohthre) * 1
+        mask = (faultrst == 0) * 1 * mask
+    else:
+        # ok, but i prefer using only mask_extent, so:
+        mask = (coh > 0) * 1
+        mask = (faultrst == 0) * 1 * mask
+    #
     # ok, now let's calc conncomp:
     concompxr = mask != 0
     concomp, ncomp = ndimage.label(concompxr)
@@ -3087,14 +3138,19 @@ def testbovl():
             # clip to small area an unwrap it:
             boundstr = get_valid_bounds(selpha)
             selifg = load_from_xrs(selpha, selcoh, cliparea_geo=boundstr)
+            # selazi = azioffs.interp_like(selifg)  # .copy() #?  #i want full rectangle of values for better fitting
+            selazi = selazi.interp_like(selifg)  # .copy() #?  #i want full rectangle of values for better fitting
+            if np.isnan(selazi.max()):
+                print('full nans - skipping this component')
+                continue
             #######
-            cohthre = 0.35
             # mask_cohthre = (selifg['coh']>cohthre * 1).copy()
             mask_extent = (~np.isnan(selifg['coh']) * 1).copy()
             origpha = (selifg.pha * mask_extent).copy()
             phadis = selifg.pha.where(selifg.coh > cohthre).copy()
             phadis.values = remove_islands(phadis.values, 7)
             mask_cohthre = (~np.isnan(phadis) * 1).copy()
+            print('Gauss-Seidel nanfilling (slow but useful)')
             selifg['pha'] = interpolate_nans_pyinterp_phase(phadis)  # yes, takes time, but useful
             # selifg['coh']=interpolate_nans_pyinterp(selifg.coh)
             selifg['coh'] = selifg['coh'].fillna(0.01)
@@ -3102,16 +3158,11 @@ def testbovl():
             selifg['mask_extent'] = selifg['mask_extent'] * 0 + 1
             selifg['cpx'].values = magpha2RI_array(selifg.coh.values, selifg.pha.values)
             # lv.plot3(selifg.pha, selifg.coh, selifg0.unw.where(selifg.coh>0.35))
+            # lv.plot3(selpha, selcoh, selazi)
             #######
-            selazi = azioffs.interp_like(selifg)  # .copy() # or no need?
+            print('Filtering azi offsets - quadratic function')
             selazif = filter_bovl_global(selazi, method='quadratic')  # , mask_back = False) # or
             azioffsf = selazif.where(mask_extent==1).combine_first(azioffsf)
-            unw = unwfullresid_masked_xr.interp_like(selifg, method='nearest') # this is just a clip
-            unw = unw.where(mask_extent==1)
-            seldif = unw - azioffsf
-            print(f'overall diff: {float(seldif.median())}')
-            unw = unw - seldif.median() # near it to the azioffsf
-            unwfullresid_masked_xr = unw.combine_first(unwfullresid_masked_xr)
             #
             #
             # now i can use selazi for prevest, although not sure if this is the best?
@@ -3120,6 +3171,7 @@ def testbovl():
             tmpdir = 'bagr'
             if os.path.exists(tmpdir):
                 shutil.rmtree(tmpdir)
+            #
             os.mkdir(tmpdir)
             try:
                 selifg = process_ifg_core(selifg, ml=1, fillby='gauss', thres=0, tmpdir=tmpdir,
@@ -3132,7 +3184,7 @@ def testbovl():
                 selifg2 = selifg.where(mask_cohthre == 1)
             except:
                 print('some error')
-            seldif = selifg2['unw'] - selazif  # these are good values..
+            seldif = selifg['unw'] - selazi  # these are good values, so let's use unfiltered azis..
             print(f'overall diff: {float(seldif.median())}')
             # add resids (unwrap it?):
             cpx = pha2cpx(wrap2phase((origpha - wrap2phase(selifg['unw'])).fillna(0).values))
@@ -3144,23 +3196,32 @@ def testbovl():
             unwfullxr = (unwfull).combine_first(unwfullxr)
             unwfullresidxr = (unwfullresid).combine_first(unwfullresidxr)
             unwxr = (unw).combine_first(unwxr)
+            '''
+            unw = unwfullresid_masked_xr.interp_like(selifg, method='nearest') # this is just a clip
+            unw = unw.where(mask_extent==1)
+            seldif = unw - azioffsf
+            print(f'overall diff: {float(seldif.median())}')
+            unw = unw - seldif.median() # near it to the azioffsf
+            unwfullresid_masked_xr = unw.combine_first(unwfullresid_masked_xr)
+            '''
         except:
             print('error ')
             continue
     #
-    export_xr2tif(azioffsf, 'state.07.azioffs_filt.tif')
+    #
+    export_xr2tif(azioffsf, outstr+'.azioffs_filt.tif')
     resid = unwfullresidxr.copy()
     resid.values = wrap2phase(unwfullresidxr - unwfullresidxr.median() - bovlifg)  # .fillna(0).values))
     resid.values = wrap2phase(resid - resid.median())
-    export_xr2tif(resid, 'state.07.unwfullres.residpha.tif')
+    export_xr2tif(resid, outstr+'.unwfullres.residpha.tif')
     unwfullresidxr = unwfullresidxr - resid
-    unwfullresid_masked_xr = unwfullresidxr.where(coh>0.2)
-    export_xr2tif(unwfullresid_masked_xr, 'state.07.unwfullres.masked0.2.tif')
+    unwfullresid_masked_xr = unwfullresidxr.where(coh>cohthre)
+    export_xr2tif(unwfullresid_masked_xr, outstr+'.unwfullres.masked0.2.tif')
     unwfullresid_masked_xr.values = remove_islands(unwfullresid_masked_xr.values, 9)
-    export_xr2tif(unwfullresid_masked_xr, 'state.07.unwfullres.masked0.2b.tif')
-    export_xr2tif(unwxr, 'state.07.unw.tif') #unwsep.mask.02.tif')
-    export_xr2tif(unwfullxr, 'state.07.unwfull.tif')  # unwsep.mask.02.tif')
-    export_xr2tif(unwfullresidxr, 'state.07.unwfullres.tif')  # unwsep.mask.02.tif')
+    export_xr2tif(unwfullresid_masked_xr, outstr+'.unwfullres.masked0.2b.tif')
+    export_xr2tif(unwxr, outstr+'.unw.tif') #unwsep.mask.02.tif')
+    export_xr2tif(unwfullxr, outstr+'.unwfull.tif')  # unwsep.mask.02.tif')
+    export_xr2tif(unwfullresidxr, outstr+'.unwfullres.tif')  # unwsep.mask.02.tif')
     # export_xr2tif(unwxr, 'unwsep.mask.02.bck.tif')
 
 
