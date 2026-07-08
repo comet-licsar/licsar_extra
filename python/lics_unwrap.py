@@ -3073,8 +3073,27 @@ def get_valid_bounds(gridxr, return_string = True):
 
 
 
-def testbovl():
+def aos_bovl_unwrap(azitif = '021D_azi.tif', bovltif = 'mai_021D_20230105_20230306_nn.pha.tif',
+             cohtif = 'mai_021D_20230105_20230306_nn.coh.tif', geojsonfile = 'fault_tr/simple_fault_2023-2-14.shp',
+             outstr = '021D_aos_unw_03_ml8',
+             preml = 8, use_cohlike = True, cohthre = 0.5):
+    '''
+
+    Args:
+        azitif:
+        bovltif:
+        cohtif:
+        geojsonfile:
+        outstr:
+        preml: multilook before processing (use factor 5 or so.. no ml will take ages)
+        use_cohlike: cohlike is coherence re-estimate (something like filtered coh - but will work only if multilooking)
+        cohthre: 0.5 is fine for cohlike
+
+    Returns:
+
+    '''
     # from lics_unwrap import *
+    '''
     azitif = '021D_azi.tif'
     bovltif = 'mai_021D_20230105_20230306_nn.pha.tif'
     cohtif = 'mai_021D_20230105_20230306_nn.coh.tif'
@@ -3089,7 +3108,8 @@ def testbovl():
     cohthre = 0.2
     cohthre = 0.3 #5
     cohthre = 0.5 # for cohlike.. (or 0.6 if preml==5)
-    unwrap_residuals = False
+    '''
+    concomp_use_fullmask = False  # not best idea to enable this..
     #### proper way:
     import shutil
     import lics_vis as lv
