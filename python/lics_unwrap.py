@@ -3074,7 +3074,7 @@ def get_valid_bounds(gridxr, return_string = True):
 
 
 def testbovl():
-    from lics_unwrap import *
+    # from lics_unwrap import *
     azitif = '021D_azi.tif'
     bovltif = 'mai_021D_20230105_20230306_nn.pha.tif'
     cohtif = 'mai_021D_20230105_20230306_nn.coh.tif'
