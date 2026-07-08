@@ -3195,7 +3195,7 @@ def testbovl():
             cohx = selifg.coh.fillna(0).values
             unwresid = unwrap_np(cpx, cohx, defomax=1.2, deltemp=True)
             unwfull = selifg['unw'] - seldif
-            unwfullresid = unwfull + unwresid - unwresid.median() # I assume resids should be around 0, if not, it is unw error
+            unwfullresid = unwfull + unwresid - np.nanmedian(unwresid) # I assume resids should be around 0, if not, it is unw error
             seldif = unwfullresid - selazif
             seldif = float(seldif.median())
             print(f'overall diff unw+unwresids from azioffs: {seldif} rad')
