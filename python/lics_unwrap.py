@@ -776,7 +776,7 @@ def process_ifg_core(ifg, tmpdir = os.getcwd(),
         coh2var = False, add_resid = True,  rampit=False, subtract_gacos = False,
         extweights = None, extweights_mask_threshold = 0.25, keep_coh_debug = True,
         use_gamma = False, keep_coh_px = 0.25,
-        spatialmask_km = 2.0):
+        spatialmask_km = 2.0, snaphu_init = 'MCF'):
     """Core ifg unwrapping procedure
     Note: tmpdir should be place for unneeded products (please keep unique per pair)
     """
@@ -1023,7 +1023,7 @@ def process_ifg_core(ifg, tmpdir = os.getcwd(),
             cpx=pha2cpx(wrap2phase((ifg_ml['origpha'] - ifg_ml['filtpha']).fillna(0).values)) # fillna probably not needed
             coh=ifg_ml.coh.fillna(0.001).values
             # unw=unwrap_np(cpx,coh,defomax=0,tmpdir=tmpunwdir,mask=mask,deltemp=True)
-            unw = unwrap_np(cpx, coh, defomax=0, tmpdir=tmpunwdir, deltemp=True)
+            unw = unwrap_np(cpx, coh, defomax=1.2, tmpdir=tmpunwdir, deltemp=True)
             unw = unw * ifg_ml.mask_full.values
             unw[unw == 0] = np.nan
             # 2022-07-28: seems not good idea to correct by median...
@@ -1291,7 +1291,7 @@ def process_ifg_core(ifg, tmpdir = os.getcwd(),
             RI2cpx(r, i, binCPX)
             #main_unwrap(binCPX, bincoh, binmask, outunwbin, width, defomax = defomax/2)
             # ok, just hold the defomax low - discontinuities are not wanted or expected here..or not?
-            main_unwrap(binCPX, bincoh, binmask, outunwbin, width, defomax = 0.3, printout = False)
+            main_unwrap(binCPX, bincoh, binmask, outunwbin, width, defomax = 0.3, printout = False, snaphu_init = snaphu_init)
             unw1 = np.fromfile(binfile,dtype=dtype)
             unw1 = unw1.reshape(ifg_ml.pha.shape)
             ifg_ml[daname] = ifg_ml['pha'] #.copy()
@@ -3089,6 +3089,7 @@ def testbovl():
     cohthre = 0.2
     cohthre = 0.3 #5
     cohthre = 0.5 # for cohlike.. (or 0.6 if preml==5)
+    unwrap_residuals = False
     #### proper way:
     import shutil
     import lics_vis as lv
@@ -3179,36 +3180,49 @@ def testbovl():
                                           defomax=1.2, hgtcorr=False, gacoscorr=False, pre_detrend=False,
                                           cliparea_geo=None, outtif=None, prevest=prevest,
                                           add_resid=False, rampit=False, subtract_gacos=False,
-                                          spatialmask_km=0)
+                                          spatialmask_km=0, snaphu_init = 'MCF')
                 selifg = selifg.where(mask_extent == 1)
-                selifg2 = selifg.where(mask_cohthre == 1)
+                # selifg2 = selifg.where(mask_cohthre == 1)
             except:
                 print('some error')
-            seldif = selifg['unw'] - selazi  # these are good values, so let's use unfiltered azis..
-            print(f'overall diff: {float(seldif.median())}')
-            # add resids (unwrap it?):
-            cpx = pha2cpx(wrap2phase((origpha - wrap2phase(selifg['unw'])).fillna(0).values))
+            # seldif = selifg['unw'] - selazi  # these are good values, so let's use unfiltered azis..
+            seldif = selifg['unw'] - selazif
+            seldif = float(seldif.median())
+            print(f'overall diff unw from azioffs: {seldif} rad')
+            # add resids (unwrap it?) -> unwfullresid
+            residpha = wrap2phase((origpha - wrap2phase(selifg['unw'])).fillna(0).values)
+            cpx = pha2cpx(residpha)
             cohx = selifg.coh.fillna(0).values
-            unwresid = unwrap_np(cpx, cohx, defomax=0, deltemp=True)
-            unwfull = selifg['unw'] - seldif.median()
-            unw = selifg2['unw'] - seldif.median()
-            unwfullresid = unwfull + unwresid  # *mask_extent
+            unwresid = unwrap_np(cpx, cohx, defomax=1.2, deltemp=True)
+            unwfull = selifg['unw'] - seldif
+            unwfullresid = unwfull + unwresid - unwresid.median() # I assume resids should be around 0, if not, it is unw error
+            seldif = unwfullresid - selazif
+            seldif = float(seldif.median())
+            print(f'overall diff unw+unwresids from azioffs: {seldif} rad')
+            unwfullresid = unwfullresid - seldif
+            # try without unwrapping them -> unw
+            unw = selifg['unw'] + residpha  # - seldif
+            seldif = unw - selazif
+            seldif = float(seldif.median())
+            print(f'overall diff unw+resids from azioffs: {seldif} rad')
+            unw = unw - seldif
+            # just add to xrs:
             unwfullxr = (unwfull).combine_first(unwfullxr)
             unwfullresidxr = (unwfullresid).combine_first(unwfullresidxr)
             unwxr = (unw).combine_first(unwxr)
-            '''
-            unw = unwfullresid_masked_xr.interp_like(selifg, method='nearest') # this is just a clip
-            unw = unw.where(mask_extent==1)
-            seldif = unw - azioffsf
-            print(f'overall diff: {float(seldif.median())}')
-            unw = unw - seldif.median() # near it to the azioffsf
-            unwfullresid_masked_xr = unw.combine_first(unwfullresid_masked_xr)
-            '''
+            #
+            # unw = unwfullresid_masked_xr.interp_like(selifg, method='nearest') # this is just a clip
+            # unw = unw.where(mask_extent==1)
+            # seldif = unw - azioffsf
+            # print(f'overall diff: {float(seldif.median())}')
+            # unw = unw - seldif.median() # near it to the azioffsf
+            # unwfullresid_masked_xr = unw.combine_first(unwfullresid_masked_xr)
         except:
             print('error ')
             continue
     #
     #
+    export_xr2tif(coh, outstr + '.coh_ml.tif')
     export_xr2tif(azioffsf, outstr+'.azioffs_filt.tif')
     resid = unwfullresidxr.copy()
     resid.values = wrap2phase(unwfullresidxr - unwfullresidxr.median() - bovlifg)  # .fillna(0).values))
@@ -3216,12 +3230,19 @@ def testbovl():
     export_xr2tif(resid, outstr+'.unwfullres.residpha.tif')
     unwfullresidxr = unwfullresidxr - resid
     unwfullresid_masked_xr = unwfullresidxr.where(coh>cohthre)
-    export_xr2tif(unwfullresid_masked_xr, outstr+'.unwfullres.masked0.2.tif')
+    export_xr2tif(unwfullresid_masked_xr, outstr+'.unwfullres.masked.tif')
     unwfullresid_masked_xr.values = remove_islands(unwfullresid_masked_xr.values, 9)
-    export_xr2tif(unwfullresid_masked_xr, outstr+'.unwfullres.masked0.2b.tif')
+    export_xr2tif(unwfullresid_masked_xr, outstr+'.unwfullres.masked.b.tif')
+    resid = unwxr.copy()
+    resid.values = wrap2phase(unwxr - unwxr.median() - bovlifg)  # .fillna(0).values))
+    resid.values = wrap2phase(resid - resid.median())
+    export_xr2tif(resid, outstr + '.unw.residpha.tif')
+    unwxr = unwxr - resid
     export_xr2tif(unwxr, outstr+'.unw.tif') #unwsep.mask.02.tif')
     export_xr2tif(unwfullxr, outstr+'.unwfull.tif')  # unwsep.mask.02.tif')
     export_xr2tif(unwfullresidxr, outstr+'.unwfullres.tif')  # unwsep.mask.02.tif')
+    export_xr2tif(unwfullxr.where(coh>cohthre), outstr + '.unwfull.masked.tif')
+    export_xr2tif(unwxr.where(coh>cohthre), outstr + '.unw.masked.tif')
     # export_xr2tif(unwxr, 'unwsep.mask.02.bck.tif')
 
 
@@ -3377,7 +3398,7 @@ def filter_histmed_ndarray(ndarr, winsize=32, bins=20, medbin=True):
 
 # main_unwrap(binCPX, bincoh, binmask, outunwbin, width, bin_est
 def main_unwrap(cpxbin, cohbin, maskbin = None, outunwbin = 'unwrapped.bin',
-                width = 0, est = None, bin_pre_remove = None, conncomp=False, defomax = 0.6, printout = True):
+                width = 0, est = None, bin_pre_remove = None, conncomp=False, defomax = 0.6, printout = True, snaphu_init = 'MCF'):
     '''Main function to perform unwrapping with snaphu.
     
     Args:
@@ -3409,7 +3430,7 @@ def main_unwrap(cpxbin, cohbin, maskbin = None, outunwbin = 'unwrapped.bin',
     if printout:
         print('processing by snaphu')
     prefix = os.path.dirname(cpxbin)+'/'
-    snaphuconffile = make_snaphu_conf(prefix, defomax)
+    snaphuconffile = make_snaphu_conf(prefix, defomax, initmethod=snaphu_init)
     extracmd = ''
     if est:
         extracmd = "-e {}".format(est)
