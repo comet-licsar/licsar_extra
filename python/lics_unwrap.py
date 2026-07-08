@@ -3114,11 +3114,13 @@ def aos_bovl_unwrap(azitif = '021D_azi.tif', bovltif = 'mai_021D_20230105_202303
     concomp_use_fullmask = False  # not best idea to enable this..
     #### proper way:
     import shutil
-    import lics_vis as lv
+    # import lics_vis as lv
     azioffs = load_tif2xr(azitif, fixnanzero=True)
     azioffs = mm2rad_azimuth(azioffs * 1000)  # , dfDC=4370)
     bovlifg = load_tif2xr(bovltif)
     coh = load_tif2xr(cohtif)
+    if coh.max() > 10:  # means this is probably in 0-255
+        coh = coh/255
     coh.values[coh.values > 1] = 1  # this was an issue ...
     if preml:
         ifg = load_from_xrs(bovlifg, coh)
@@ -3191,7 +3193,9 @@ def aos_bovl_unwrap(azitif = '021D_azi.tif', bovltif = 'mai_021D_20230105_202303
             # now i can use selazi for prevest, although not sure if this is the best?
             # prevest = None  # or:
             prevest = selazif.copy()
-            tmpdir = 'bagr'
+            # tmpdir = 'bagr'
+            folder_name = azitif.split('/')[-1].split('.')[0]
+            tmpdir = f'bagr_{folder_name}'
             if os.path.exists(tmpdir):
                 shutil.rmtree(tmpdir)
             #
