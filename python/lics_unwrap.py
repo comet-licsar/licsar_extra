@@ -3109,6 +3109,8 @@ def aos_bovl_unwrap(azitif = '021D_azi.tif', bovltif = 'mai_021D_20230105_202303
     cohthre = 0.3 #5
     cohthre = 0.5 # for cohlike.. (or 0.6 if preml==5)
     '''
+    if preml == 1:
+        preml = None
     concomp_use_fullmask = False  # not best idea to enable this..
     #### proper way:
     import shutil
