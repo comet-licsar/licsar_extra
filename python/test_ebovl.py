@@ -1,71 +1,254 @@
 #!/usr/bin/env python3
 # some scratch code for figs
 from gafa_licsar import *
-
-# 2 Amplitude of an extended single burst with outline of standard SLC truncation
-
-
-
-# 4 a. Single burst overlap in radar coords (Queen Maud’s Land?) using 100% extension and outline of standard overlap.
-# b. Coherence variation across burst in rg.
-# c. Same in az.
-ifgs=glob.glob('ifgm*')
-for fname in ifgs:
-    ifg, meta = load_gdr(fname)
-    plt.imshow(np.log1p(np.abs(ifg)), cmap="gray")
-sigmas=glob.glob('sigma*')
-
 import numpy as np
 import matplotlib.pyplot as plt
-# Example: your arrays
-# A: (h1, w1) or (h1, w1, c)
-# B: (h2, w2) or (h2, w2, c)
-# C: (h3, w3) or (h3, w3, c)
-# A, B, C = arr1, arr2, arr3
-# coh
-imgs = [np.abs(load_gdr(ifgs[0])[0]),
-        np.abs(load_gdr(ifgs[1])[0]),
-        np.abs(load_gdr(ifgs[2])[0]),]
-cmap = 'gray'
-#pha
-imgs = [np.angle(load_gdr(ifgs[0])[0]),
-        np.angle(load_gdr(ifgs[1])[0]),
-        np.angle(load_gdr(ifgs[2])[0]),]
-cmap = 'hsv'
+
+### THUR:
+# amplitude (sigma naught -> dB) and change labels to *4 and *16
+# also add the precise extents rectangle
+
+# QML coh, pha
+# 2 Amplitude of an extended single burst with outline of standard SLC truncation
+sigmas=glob.glob('sigma*')
 #backscatter
 imgs = [10 * np.log10(np.maximum(load_gdr(sigmas[0])[0], 1e-10)),
         10 * np.log10(np.maximum(load_gdr(sigmas[1])[0], 1e-10)),
         10 * np.log10(np.maximum(load_gdr(sigmas[2])[0], 1e-10))]
 cmap = 'viridis'
 
+# final fig - only IW1:
 
-# Figure layout parameters (tweak if you want different margins/gaps)
+
+from matplotlib.patches import Rectangle
+from matplotlib.ticker import FuncFormatter
+
+rect_wids = [20260, 23612, 24232]
+rect_heis = [1420, 1424, 1422]
+rect_wids2 = [20520, 24372, 24792]
+rect_heis2 = [1476, 1480, 1478]
+## attempt 2
 left, right = 0.08, 0.98
 bottom, top = 0.05, 0.95
 gap = 0.01  # vertical gap fraction in figure coordinates
+gap = 0.005
+vmin = -35
+vmin = -22 # NESZ
+#vmin = -20
+vmax = -5
+vmax = 0
+dy = 4
+dx = 16
 
-fig = plt.figure(figsize=(6, 6))
+fig = plt.figure(figsize=(8.5, 8))
 
-total_h = sum(hs)
+mappable = None
+
+available_h = (top-bottom) - gap*(len(imgs)-1)
+
 y = top
+add_smaller = False
+
 for i, im in enumerate(imgs):
-    h_frac = hs[i] / total_h
+
+    h_frac = hs[i] / sum(hs)
     w_frac = ws[i] / max(ws)
 
-    ax_h = (top - bottom) * h_frac
-    ax_w = (right - left) * w_frac
+    ax_h = available_h * h_frac
+    ax_w = (right-left) * w_frac
 
-    ax_x = left
-    ax_y = y - ax_h
+    ax = fig.add_axes([
+        left,
+        y-ax_h,
+        ax_w,
+        ax_h
+    ])
+    
+    if i == 0:
+        cb_x = left + ax_w + 0.025
+        cb_y = y - ax_h
+        cb_h = ax_h
+    
+    ny, nx = im.shape
 
-    ax = fig.add_axes([ax_x, ax_y, ax_w, ax_h])
-    ax.imshow(im, aspect='equal', interpolation='nearest', cmap=cmap)
-    # ax.axis('off')
+    mappable = ax.imshow(
+        im,
+        cmap=cmap,
+        vmin=vmin,
+        vmax=vmax,
+        aspect='equal'
+    )
+    # add rectangle:
+    if add_smaller:
+        rect_wid = rect_wids[i]
+        rect_hei = rect_heis[i]
 
-    y = ax_y - gap
+        rect_wid_px = rect_wid / dx
+        rect_hei_px = rect_hei / dy
 
-plt.colorbar()
+        rect = Rectangle(
+            (
+                nx/2 - rect_wid_px/2,
+                ny/2 - rect_hei_px/2
+            ),
+            rect_wid_px,
+            rect_hei_px,
+            fill=False,
+            edgecolor='black',
+            linewidth=1
+        )
+        ax.add_patch(rect)
+        
+    rect_wid = rect_wids2[i]
+    rect_hei = rect_heis2[i]
+
+    rect_wid_px = rect_wid / dx
+    rect_hei_px = rect_hei / dy
+    
+    rect2 = Rectangle(
+        (
+            nx/2 - rect_wid_px/2,
+            ny/2 - rect_hei_px/2
+        ),
+        rect_wid_px,
+        rect_hei_px,
+        fill=False,
+        edgecolor='black',
+        linewidth=2
+    )
+    
+    ax.add_patch(rect2)
+    ax.xaxis.set_major_formatter(
+        FuncFormatter(lambda x, pos: f"{x*dx:.0f}")
+    )
+    ax.yaxis.set_major_formatter(
+        FuncFormatter(lambda y, pos: f"{y*dy:.0f}")
+    )
+
+    if i == 0:
+        ax.set_ylabel("Azimuth [px]")
+
+    if i == 0: #len(imgs)-1:
+        ax.set_xlabel("Range [px]")
+        
+    y -= ax_h + gap
+
+
+cax = fig.add_axes([cb_x, cb_y+0.025, 0.02, cb_h-0.05])
+
+cb = fig.colorbar(
+    mappable,
+    cax=cax,
+    label=r"$\sigma^0$ [dB]"
+)
+
+#cb.set_ticks([-22, -20, -15, -10, -5])
+
 plt.show()
+
+'''
+img = 10 * np.log10(np.maximum(load_gdr(sigmas[0])[0], 1e-10))
+im = img
+i = 0
+vmin = -20
+fig = plt.figure(figsize=(8.5, 2.5))
+cb_x = left + ax_w + 0.025
+cb_y = y - ax_h
+cb_h = ax_h
+ax = fig.add_axes([
+        left,
+        y-ax_h,
+        ax_w,
+        ax_h
+    ])
+mappable = ax.imshow(
+        img,
+        cmap=cmap,
+        vmin=vmin,
+        vmax=vmax,
+        aspect='equal'
+    )
+ny, nx = im.shape
+rect_wid = rect_wids2[i]
+rect_hei = rect_heis2[i]
+rect_wid_px = rect_wid / dx
+rect_hei_px = rect_hei / dy
+rect2 = Rectangle(
+    (
+        nx/2 - rect_wid_px/2,
+        ny/2 - rect_hei_px/2
+    ),
+    rect_wid_px,
+    rect_hei_px,
+    fill=False,
+    edgecolor='black',
+    linewidth=2
+)
+
+ax.add_patch(rect2)
+ax.xaxis.set_major_formatter(
+    FuncFormatter(lambda x, pos: f"{x*dx:.0f}")
+)
+ax.yaxis.set_major_formatter(
+    FuncFormatter(lambda y, pos: f"{y*dy:.0f}")
+)
+
+ax.set_ylabel("Azimuth [px]")
+
+ax.set_xlabel("Range [px]")
+#cax = fig.add_axes([cb_x, cb_y+0.025, 0.02, cb_h-0.05])
+
+cb = fig.colorbar(
+    mappable,
+    #cax=cax,
+    label=r"$\sigma^0$ [dB]"
+)
+
+#cb.set_ticks([-22, -20, -15, -10, -5])
+
+plt.show()
+'''
+
+
+
+'''
+# previous version - all three swaths:
+
+'''
+
+
+
+
+
+
+
+
+# 4 a. Single burst overlap in radar coords (Queen Maud’s Land?) using 100% extension and outline of standard overlap.
+# b. Coherence variation across burst in rg.
+# c. Same in az.
+ifgs=glob.glob('ifgm_*')
+#for fname in ifgs:
+#    ifg, meta = load_gdr(fname)
+#    plt.imshow(np.log1p(np.abs(ifg)), cmap="gray")
+
+
+
+# Example: your arrays
+# A: (h1, w1) or (h1, w1, c)
+# B: (h2, w2) or (h2, w2, c)
+# C: (h3, w3) or (h3, w3, c)
+# A, B, C = arr1, arr2, arr3
+# coh
+cohs = [np.abs(load_gdr(ifgs[0])[0]),
+        np.abs(load_gdr(ifgs[1])[0]),
+        np.abs(load_gdr(ifgs[2])[0]),]
+cmap = 'gray'
+#pha
+phas = [np.angle(load_gdr(ifgs[0])[0]),
+        np.angle(load_gdr(ifgs[1])[0]),
+        np.angle(load_gdr(ifgs[2])[0]),]
+cmap = 'hsv'
+
 
 
 
@@ -73,10 +256,10 @@ plt.show()
 
 # b
 axx, meaning = 0, 'Range sample'
-axx, meaning = 1, 'Azimuth line'
-y0 = imgs[0].mean(axis=axx)
-y1 = imgs[1].mean(axis=axx)
-y2 = imgs[2].mean(axis=axx)
+#axx, meaning = 1, 'Azimuth line'
+y0 = cohs[0].mean(axis=axx)
+y1 = cohs[1].mean(axis=axx)
+y2 = cohs[2].mean(axis=axx)
 y0[y0 == 0] = np.nan
 y1[y1 == 0] = np.nan
 y2[y2 == 0] = np.nan
@@ -99,7 +282,277 @@ plt.show()
 
 
 
+# only IW2, plot on vik0?
 
+# now using for phase:
+
+from matplotlib.patches import Rectangle
+from matplotlib.ticker import FuncFormatter
+
+#rect_wids = [20260, 23612, 24232]
+#rect_heis = [1420, 1424, 1422]
+# these ones are needed!!
+# these are for the bovl ifg:
+rect_wids2 = [19833, 23501, 22882]
+rect_heis2 = [123, 116, 114]
+
+## attempt 2
+left, right = 0.08, 0.98
+bottom, top = 0.05, 0.95
+gap = 0.01  # vertical gap fraction in figure coordinates
+gap = 0.005
+vmin = -35
+vmin = -22 # NESZ
+vmax = -5
+# imgs = phas
+vmin = -np.pi
+vmax = np.pi
+# cmap = 'vik0'
+import cmcrameri.cm as cmc
+cmap = cmc.vikO
+
+dy = 4
+dx = 16
+hs, ws = [], []
+for im in imgs:
+    hs.append(im.shape[0])
+    ws.append(im.shape[1])
+
+
+fig = plt.figure(figsize=(8.5, 4))
+mappable = None
+available_h = (top-bottom) - gap*(len(imgs)-1)
+y = top
+add_smaller = False
+
+for i, im in enumerate(imgs):
+    h_frac = hs[i] / sum(hs)
+    w_frac = ws[i] / max(ws)
+    ax_h = available_h * h_frac
+    ax_w = (right-left) * w_frac
+    ax = fig.add_axes([
+        left,
+        y-ax_h,
+        ax_w,
+        ax_h
+    ])
+    if i == 0:
+        cb_x = left + ax_w + 0.025
+        cb_y = y - ax_h
+        cb_h = ax_h
+    ny, nx = im.shape
+    mappable = ax.imshow(
+        im,
+        cmap=cmap,
+        vmin=vmin,
+        vmax=vmax,
+        aspect='equal'
+    )
+    # add rectangle:
+    if add_smaller:
+        rect_wid = rect_wids[i]
+        rect_hei = rect_heis[i]
+        rect_wid_px = rect_wid / dx
+        rect_hei_px = rect_hei / dy
+        rect = Rectangle(
+            (
+                nx/2 - rect_wid_px/2,
+                ny/2 - rect_hei_px/2
+            ),
+            rect_wid_px,
+            rect_hei_px,
+            fill=False,
+            edgecolor='black',
+            linewidth=1
+        )
+        ax.add_patch(rect)
+    rect_wid = rect_wids2[i]
+    rect_hei = rect_heis2[i]
+    rect_wid_px = rect_wid / dx
+    rect_hei_px = rect_hei / dy
+    rect2 = Rectangle(
+        (
+            nx/2 - rect_wid_px/2,
+            ny/2 - rect_hei_px/2
+        ),
+        rect_wid_px,
+        rect_hei_px,
+        fill=False,
+        edgecolor='black',
+        linewidth=2
+    )
+    ax.add_patch(rect2)
+    ax.xaxis.set_major_formatter(
+        FuncFormatter(lambda x, pos: f"{x*dx:.0f}")
+    )
+    ax.yaxis.set_major_formatter(
+        FuncFormatter(lambda y, pos: f"{y*dy:.0f}")
+    )
+    if i == 1:
+        ax.set_ylabel("Azimuth [px]")
+    if i == len(imgs)-1:
+        ax.set_xlabel("Range [px]")
+    y -= ax_h + gap
+
+
+cax = fig.add_axes([cb_x, cb_y+0.025, 0.02, cb_h-0.05])
+cb = fig.colorbar(
+    mappable,
+    cax=cax,
+    label = 'phase [rad]'
+    # label=r"$\sigma^0$ [dB]"
+)
+# cb.set_ticks([-22, -20, -15, -10, -5])
+
+plt.show()
+
+
+
+
+
+
+
+
+
+
+
+
+
+# final fig 2 - only IW1:
+
+
+from matplotlib.patches import Rectangle
+from matplotlib.ticker import FuncFormatter
+
+rect_wids = [20260, 23612, 24232]
+rect_heis = [1420, 1424, 1422]
+rect_wids2 = [20520, 24372, 24792]
+rect_heis2 = [1476, 1480, 1478]
+## attempt 2
+left, right = 0.08, 0.98
+bottom, top = 0.05, 0.95
+gap = 0.01  # vertical gap fraction in figure coordinates
+gap = 0.005
+vmin = -35
+vmin = -22 # NESZ
+#vmin = -20
+vmax = -5
+vmax = 0
+dy = 4
+dx = 16
+
+fig = plt.figure(figsize=(8.5, 8))
+
+mappable = None
+
+available_h = (top-bottom) - gap*(len(imgs)-1)
+
+y = top
+add_smaller = False
+
+for i, im in enumerate(imgs):
+
+    h_frac = hs[i] / sum(hs)
+    w_frac = ws[i] / max(ws)
+
+    ax_h = available_h * h_frac
+    ax_w = (right-left) * w_frac
+
+    ax = fig.add_axes([
+        left,
+        y-ax_h,
+        ax_w,
+        ax_h
+    ])
+    
+    if i == 0:
+        cb_x = left + ax_w + 0.025
+        cb_y = y - ax_h
+        cb_h = ax_h
+    
+    ny, nx = im.shape
+
+    mappable = ax.imshow(
+        im,
+        cmap=cmap,
+        vmin=vmin,
+        vmax=vmax,
+        aspect='equal'
+    )
+    # add rectangle:
+    if add_smaller:
+        rect_wid = rect_wids[i]
+        rect_hei = rect_heis[i]
+
+        rect_wid_px = rect_wid / dx
+        rect_hei_px = rect_hei / dy
+
+        rect = Rectangle(
+            (
+                nx/2 - rect_wid_px/2,
+                ny/2 - rect_hei_px/2
+            ),
+            rect_wid_px,
+            rect_hei_px,
+            fill=False,
+            edgecolor='black',
+            linewidth=1
+        )
+        ax.add_patch(rect)
+        
+    rect_wid = rect_wids2[i]
+    rect_hei = rect_heis2[i]
+
+    rect_wid_px = rect_wid / dx
+    rect_hei_px = rect_hei / dy
+    
+    rect2 = Rectangle(
+        (
+            nx/2 - rect_wid_px/2,
+            ny/2 - rect_hei_px/2
+        ),
+        rect_wid_px,
+        rect_hei_px,
+        fill=False,
+        edgecolor='black',
+        linewidth=2
+    )
+    
+    ax.add_patch(rect2)
+    ax.xaxis.set_major_formatter(
+        FuncFormatter(lambda x, pos: f"{x*dx:.0f}")
+    )
+    ax.yaxis.set_major_formatter(
+        FuncFormatter(lambda y, pos: f"{y*dy:.0f}")
+    )
+
+    if i == 0:
+        ax.set_ylabel("Azimuth [px]")
+
+    if i == 0: #len(imgs)-1:
+        ax.set_xlabel("Range [px]")
+        
+    y -= ax_h + gap
+
+
+cax = fig.add_axes([cb_x, cb_y+0.025, 0.02, cb_h-0.05])
+
+cb = fig.colorbar(
+    mappable,
+    cax=cax,
+    label=r"$\sigma^0$ [dB]"
+)
+
+#cb.set_ticks([-22, -20, -15, -10, -5])
+
+plt.show()
+
+
+
+
+
+
+# below is on how to get the bovl width/length values:
 
 
 import numpy as np
@@ -136,9 +589,13 @@ def polygon_width_height(path, x_col=0, y_col=1, id_col=2):
 
     return results
 
+# to get bovls:
+mtab=tab/20260306R_tab
+ScanSAR_burst_overlap $mtab tata 1 1 3 1
+
 # Example usage:
-# for poly_i, w, h in polygon_width_height("your_polygon.txt"):
-#     print(poly_i, w, h)
+for poly_i, w, h in polygon_width_height("tata.SLC_az_ovr.poly"):
+    print(poly_i, w, h)
 
 # 5 a. Wrapped geocoded burst and swath overlaps for Türkiye for single geometry (with edges trimmed where coh drops)
 # b. Same with standard BOI.
