@@ -585,6 +585,91 @@ def plot_ifg_grid(
     return fig, h_axes_all
 
 
+import numpy as np
+import matplotlib.pyplot as plt
+from datetime import datetime, timedelta
+
+
+def matlab_datenum_to_datetime(d):
+    """
+    Convert MATLAB datenum to Python datetime.
+    """
+    return (
+        datetime.fromordinal(int(d))
+        + timedelta(days=float(d) - int(d))
+        - timedelta(days=365.25)
+    )
+
+
+
+def plot_ps_baselines(ps, title = 'PS baseline network', figsize=(12, 6)):
+    """
+    Plot a PS (single-reference) baseline network.
+
+    Parameters
+    ----------
+    ps : dict
+        Output from load_ps_data()
+    """
+
+    dates = [matlab_datenum_to_datetime(d) for d in ps["day"]]
+    bperp = np.asarray(ps["bperp"]).squeeze()
+
+    ref_ix = int(ps["master_ix"])  # STAMPS naming
+    ref_date = dates[ref_ix]
+    ref_bperp = bperp[ref_ix]
+
+    plt.figure(figsize=figsize)
+
+    # draw interferogram connections to reference image
+    for i in range(len(dates)):
+        if i == ref_ix:
+            continue
+
+        plt.plot(
+            [ref_date, dates[i]],
+            [ref_bperp, bperp[i]],
+            color="steelblue",
+            linewidth=0.8,
+            alpha=0.6,
+        )
+
+    # acquisitions
+    plt.plot(
+        dates,
+        bperp,
+        "ko",
+        markersize=5,
+    )
+
+    # highlight reference image
+    plt.plot(
+        ref_date,
+        ref_bperp,
+        "ro",
+        markersize=10,
+        label="Reference",
+    )
+
+    # label acquisitions
+    for d, b in zip(dates, bperp):
+        plt.annotate(
+            d.strftime("%Y%m%d"),
+            (d, b),
+            fontsize=7,
+            xytext=(3, 3),
+            textcoords="offset points",
+        )
+
+    plt.xlabel("Acquisition Date")
+    plt.ylabel("Kolmá základna (m)")
+    plt.title(title)
+    plt.grid(True, alpha=0.3)
+    plt.legend()
+
+    plt.tight_layout()
+    plt.show()
+
 '''
 
 
