@@ -246,11 +246,15 @@ def mm2rad_s1(inmm, rad2mm=False):
 intif = 'GEOC/20230129_20230210/20230129_20230210.geo.azi.tif'
 '''
 
-def unwrap_with_rngoffs(phatif, cohtif, rngtif, outtif, ml = 1, cohthres=0.15):
+def unwrap_with_rngoffs(phatif, cohtif, rngtif, outtif, ml = 1, cohthres=0.15,
+                        defomax = 1.2, add_resid = True):
     ''' basically as this was done for Fentale'''
     a=filter_gold_float(rngtif) # default threshold is 5 m. should be really good enough..
     prevest=mm2rad_s1(a*1000)
-    d=process_ifg_pair(phatif, cohtif, ml = ml, fillby = 'nearest', thres = cohthres, lowpass =  False, gacoscorr = False, pre_detrend = False, outtif = outtif, prevest = prevest, keep_coh_px = 0.2)
+    d=process_ifg_pair(phatif, cohtif, ml = ml, fillby = 'nearest', thres = cohthres,
+                       lowpass =  False, gacoscorr = False, pre_detrend = False, 
+                       outtif = outtif, prevest = prevest, defomax = defomax, 
+                       add_resid = add_resid, keep_coh_px = 0.2)
     # convert back to metres
     dm=mm2rad_s1(d.unw, True)/1000
     export_xr2tif(dm, outtif.replace('.tif','.m.tif'))
@@ -344,6 +348,16 @@ def filter_gold_float(intif, thres_m = 5):
     outif = intif.replace('.tif','.filtered.tif')
     azi = load_tif2xr(intif)
     azi2=azi.where(np.abs(azi)<thres_m).copy()
+    # there are nans in the data, so we need to fill them first
+    if HAS_PYINTERP:
+        print('interpolating nans (filter_gold_float)')
+        azi2 = interpolate_nans_pyinterp(azi2)
+    else:
+        print('interpolating nans with Gaussian kernel, not using pyinterp that is (much) better..')
+        kernel = Gaussian2DKernel(x_stddev=1.5)
+        azi2.values= interpolate_replace_nans(azi2.values, kernel)
+        azi2.values = filter_nan_gaussian_conserving(azi2.values, sigma=2, trunc=4)
+        azi2 = azi2.fillna(0)
     azi2 = azi2.coarsen({'lat': ml, 'lon': ml}, boundary='trim').median()
     azi2 = goldstein_filter_xr(azi2/redfac)[0]
     azi2.values = azi2.values*redfac
