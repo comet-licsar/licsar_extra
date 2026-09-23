@@ -348,6 +348,7 @@ def filter_gold_float(intif, thres_m = 5):
     outif = intif.replace('.tif','.filtered.tif')
     azi = load_tif2xr(intif)
     azi2=azi.where(np.abs(azi)<thres_m).copy()
+    azi2 = azi2.coarsen({'lat': ml, 'lon': ml}, boundary='trim').median()
     # there are nans in the data, so we need to fill them first
     if HAS_PYINTERP:
         print('interpolating nans (filter_gold_float)')
@@ -358,7 +359,6 @@ def filter_gold_float(intif, thres_m = 5):
         azi2.values= interpolate_replace_nans(azi2.values, kernel)
         azi2.values = filter_nan_gaussian_conserving(azi2.values, sigma=2, trunc=4)
         azi2 = azi2.fillna(0)
-    azi2 = azi2.coarsen({'lat': ml, 'lon': ml}, boundary='trim').median()
     azi2 = goldstein_filter_xr(azi2/redfac)[0]
     azi2.values = azi2.values*redfac
     azi2=azi2.interp_like(azi, method='linear')
