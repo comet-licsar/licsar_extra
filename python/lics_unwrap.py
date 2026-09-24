@@ -247,9 +247,9 @@ intif = 'GEOC/20230129_20230210/20230129_20230210.geo.azi.tif'
 '''
 
 def unwrap_with_rngoffs(phatif, cohtif, rngtif, outtif, ml = 1, cohthres=0.15,
-                        defomax = 1.2, add_resid = True):
+                        defomax = 1.2, clip_filt_m = 5,add_resid = True):
     ''' basically as this was done for Fentale'''
-    a=filter_gold_float(rngtif) # default threshold is 5 m. should be really good enough..
+    a=filter_gold_float(rngtif, thres_m=clip_filt_m) # default threshold is 5 m. should be really good enough..
     prevest=mm2rad_s1(a*1000)
     d=process_ifg_pair(phatif, cohtif, ml = ml, fillby = 'nearest', thres = cohthres,
                        lowpass =  False, gacoscorr = False, pre_detrend = False, 
@@ -342,9 +342,8 @@ def filter_savgol2d_xr(da, window_length=51, polyorder=2):
     return out.where(mask)
 
 
-def filter_gold_float(intif, thres_m = 5):
+def filter_gold_float(intif, thres_m = 5, ml = 10):
     redfac = thres_m/np.pi
-    ml=10
     outif = intif.replace('.tif','.filtered.tif')
     azi = load_tif2xr(intif)
     azi2=azi.where(np.abs(azi)<thres_m).copy()
@@ -3285,6 +3284,33 @@ def aos_bovl_unwrap(azitif = '021D_azi.tif', bovltif = 'mai_021D_20230105_202303
     export_xr2tif(unwxr.where(coh>cohthre), outstr + '.unw.masked.tif')
     # export_xr2tif(unwxr, 'unwsep.mask.02.bck.tif')
 
+'''
+for relorb in ['014A', '021D', '116A', '123D']:
+    print(relorb)
+    unwmtif=relorb+'.unw.m.tif'
+    rngtif=relorb+'_rng_filtered.tif'
+    unwxr = load_tif2xr(unwmtif)
+    offxr = load_tif2xr(rngtif)
+    offxr = offxr.interp_like(unwxr, method='nearest')
+    unwxr = align_unw_with_offsets_conncomp(unwxr, offxr)
+    export_xr2tif(unwxr, relorb+'.unw.m.rngaligned.tif')
+'''
+def align_unw_with_offsets_conncomp(unwxr, offxr):
+    ''' Aligns unwrapped interferogram with offsets, using connected components (conncomp)'''
+    concompxr = ~np.isnan(unwxr)
+    concomp, ncomp = ndimage.label(concompxr)
+    concompxr = unwxr.fillna(0)*0
+    concompxr.values = concomp
+    outxr = unwxr.fillna(0)*0
+    for comp in range(ncomp):
+        seloff = offxr.where(concompxr == comp)
+        selunw = unwxr.where(concompxr == comp)
+        seldif = selunw - seloff
+        if np.isnan(seldif.median()):
+            continue
+        outxr = outxr.fillna(0)+(selunw-seldif.median()).fillna(0)
+    return outxr.where(outxr != 0)
+
 
 def clip2valid(gridxr):
     ''' Helper function to clip to smaller region'''
@@ -3297,6 +3323,7 @@ def clip2valid(gridxr):
         lat=slice(lats.max().item(), lats.min().item())
     )
     return clipped
+
 
 def bovl_unwrap(bovltif, cohtif, ml=1, maskname = 'mask_full', azitif = 'azis/inrad.tif', azi_is_in_rad = True):
     if azitif:
