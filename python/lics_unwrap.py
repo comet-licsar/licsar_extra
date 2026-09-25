@@ -260,6 +260,7 @@ def unwrap_with_rngoffs(phatif, cohtif, rngtif, outtif, ml = 1, cohthres=0.15,
     export_xr2tif(dm, outtif.replace('.tif','.m.tif'))
     # and mask it:
     coh = load_tif2xr(cohtif)/255
+    coh = coh.interp_like(dm, method='nearest')
     export_xr2tif(dm.where(coh>=cohthres), outtif.replace('.tif', '.m.masked.tif'))
     return d
 
