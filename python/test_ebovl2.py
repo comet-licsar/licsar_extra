@@ -14,6 +14,18 @@ slc_window = [437, 81, 22560, 1344]
 slc_bovl = [0, 0, 22883, 114] # 22883 x 114
 full_bovl = [0,0, 29520, 798] # 29520x798
 
+# how many m it is?
+# 1 px = 3.5-5.4 m in ground range while 14 m in azimuth
+# means, in avg, 1 px = 4.45 m in ground range and 14 m in azimuth
+# .. so, 22883 px = 101.8 km in ground range and 114 px = 1.6 km in azimuth for the slc_bovl
+# and 29520 px = 131.3 km in ground range and 798 px = 11.2 km in azimuth for the full_bovl
+# this means increase in area of 29520*798 / 22883*114 = 9.0x increase in area for the full_bovl vs slc_bovl
+# what if considering 1 px = 2.3 m?
+# in such case, 22883 px = 52.6 km in ground range and 114 px = 1.6 km in azimuth for the slc_bovl
+# and 29520 px = 67.9 km in ground range and 798 px = 11.2 km in azimuth for the full_bovl
+# 
+
+
 sigma, meta = load_gdr(f)
 sigma = 10*np.log10(sigma)
 
