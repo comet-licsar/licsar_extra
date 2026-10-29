@@ -274,13 +274,13 @@ def load_licsbas_cumh5_as_xrda(cumfile, dvars = ['cum','vel'] ):
     return out
 
 
-def correct_cum_from_tifs(cumhdfile, tifdir = 'GEOC.EPOCHS', ext='geo.iono.code.tif', tif_scale2mm = 1, sbovl=False ,outputhdf = None, directcorrect = True, newcumname = 'external_data'):
+def correct_cum_from_tifs(cumhdfile, tifdir = 'GEOC.EPOCHS', ext='geo.iono.tif', tif_scale2mm = 1, sbovl=False ,outputhdf = None, directcorrect = True, newcumname = 'external_data'):
     ''' This will load the cum.h5 and either correct cum layer (if directcorrect==True) or add new data var to the cube (if not directcorrect)
 
     Args:
         cumhdfile (str): input cum.h5 file
         tifdir (str): where to find corrections. Must be in epoch subdirs, e.g. tifdir/20240216/20240216.ext
-        ext (str):    what extension is used for the correction files after the epochdate, e.g. 'geo.iono.code.tif', 'tide.geo.tif'
+        ext (str):    what extension is used for the correction files after the epochdate, e.g. 'geo.iono.tif', 'tide.geo.tif'
         tif_scale2mm (float):  for iono [rad]: 55.465/(4*np.pi), for SET [m]: 1000, for sltd [rad] same as iono but opposite sign (real delay)
         outputhdf (str):   if None, will overwrite the input file, otherwise will export to this filename (functional: H5, NC, possibly: zarr)
         directcorrect (bool): if True, it will directly reduce the cum data, otherwise it stores it to the datacube
@@ -326,7 +326,7 @@ def correct_cum_from_tifs(cumhdfile, tifdir = 'GEOC.EPOCHS', ext='geo.iono.code.
 
 
 # looks a bit complex so I will create for sbovl specifically
-def cumcube_sbovl_remove_from_tifs(cumxr, tifdir = 'GEOC.EPOCHS', ext='geo.iono.code.sTECA.tif',  only_load_ext = False):
+def cumcube_sbovl_remove_from_tifs(cumxr, tifdir = 'GEOC.EPOCHS', ext='geo.iono.sTECA.tif',  only_load_ext = False):
     ''' Correct directly from tifs, no need to store in cubes.
     NOTE - you can also just load the exts into the cumcube without removing anything..
     (in any case, values are referred temporally to the first epoch)
@@ -358,8 +358,8 @@ def cumcube_sbovl_remove_from_tifs(cumxr, tifdir = 'GEOC.EPOCHS', ext='geo.iono.
         cumepoch = cumxr[i]
         epoch = str(cumepoch.time.values).split('T')[0].replace('-','')
         if 'STEC' in ext.upper():
-            ext1='geo.iono.code.sTECA.tif'
-            ext2='geo.iono.code.sTECB.tif'
+            ext1='geo.iono.sTECA.tif'
+            ext2='geo.iono.sTECB.tif'
         extif1 = os.path.join(tifdir, epoch, epoch+'.'+ext1)
         extif2 = os.path.join(tifdir, epoch, epoch+'.'+ext2)
         if not os.path.exists(extif1) or not os.path.exists(extif2):
@@ -445,8 +445,8 @@ def cumcube_sbovl_remove_from_tifs(cumxr, tifdir = 'GEOC.EPOCHS', ext='geo.iono.
         print(f"\nSaved list of failed epochs to failed_{ext}.txt")
     return cumxr
 
-# def check_complete_set(imdates, epochsdir, ext='geo.iono.code.tif')
-def cumcube_remove_from_tifs(cumxr, tifdir = 'GEOC.EPOCHS', ext='geo.iono.code.tif',tif_scale2mm = 1, only_load_ext = False):
+# def check_complete_set(imdates, epochsdir, ext='geo.iono.tif')
+def cumcube_remove_from_tifs(cumxr, tifdir = 'GEOC.EPOCHS', ext='geo.iono.tif',tif_scale2mm = 1, only_load_ext = False):
     ''' Correct directly from tifs, no need to store in cubes.
     NOTE - you can also just load the exts into the cumcube without removing anything..
     (in any case, values are referred temporally to the first epoch)

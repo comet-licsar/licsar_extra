@@ -304,13 +304,17 @@ gap = 0.005
 vmin = -35
 vmin = -22 # NESZ
 vmax = -5
-# imgs = phas
+imgs = phas
+imgs_coh = cohs
 vmin = -np.pi
 vmax = np.pi
 # cmap = 'vik0'
 import cmcrameri.cm as cmc
 cmap = cmc.vikO
 
+# to do only one:
+imgs = [phas[1]]
+imgs_coh = [cohs[1]]
 dy = 4
 dx = 16
 hs, ws = [], []
@@ -318,14 +322,241 @@ for im in imgs:
     hs.append(im.shape[0])
     ws.append(im.shape[1])
 
+####### option 1 - plot with coh avgs
+fig = plt.figure(figsize=(8.5, 8))
 
-fig = plt.figure(figsize=(8.5, 4))
+mappable = None
+
+available_h = (top - bottom) - gap * (len(imgs) - 1)
+
+y = top
+
+for i, im in enumerate(imgs):
+
+    # -----------------------
+    # coherence statistics
+    # -----------------------
+    im_coh = imgs_coh[i]
+
+    coh_az = im_coh.mean(axis=1)
+    coh_rg = im_coh.mean(axis=0)
+
+    h_frac = hs[i] / sum(hs)
+    w_frac = ws[i] / max(ws)
+
+    ax_h = available_h * h_frac
+    ax_w = (right - left) * w_frac
+
+    img_x = left
+    img_y = y - ax_h
+
+    ny, nx = im.shape
+
+    # -----------------------
+    # main image
+    # -----------------------
+    ax = fig.add_axes([
+        img_x,
+        img_y,
+        ax_w,
+        ax_h
+    ])
+
+    mappable = ax.imshow(
+        im,
+        cmap=cmap,
+        vmin=vmin,
+        vmax=vmax,
+        aspect='equal'
+    )
+
+    # -----------------------
+    # rectangles
+    # -----------------------
+    if add_smaller:
+
+        rect_wid_px = rect_wids[i] / dx
+        rect_hei_px = rect_heis[i] / dy
+
+        ax.add_patch(
+            Rectangle(
+                (
+                    nx/2 - rect_wid_px/2,
+                    ny/2 - rect_hei_px/2
+                ),
+                rect_wid_px,
+                rect_hei_px,
+                fill=False,
+                edgecolor='black',
+                linewidth=1
+            )
+        )
+
+    rect_wid_px = rect_wids2[i] / dx
+    rect_hei_px = rect_heis2[i] / dy
+
+    ax.add_patch(
+        Rectangle(
+            (
+                nx/2 - rect_wid_px/2,
+                ny/2 - rect_hei_px/2
+            ),
+            rect_wid_px,
+            rect_hei_px,
+            fill=False,
+            edgecolor='black',
+            linewidth=2
+        )
+    )
+
+    # -----------------------
+    # coordinate formatting
+    # -----------------------
+    ax.xaxis.set_major_formatter(
+        FuncFormatter(lambda x, pos: f"{x * dx:.0f}")
+    )
+
+    ax.yaxis.set_major_formatter(
+        FuncFormatter(lambda y, pos: f"{y * dy:.0f}")
+    )
+
+    ax.set_xlabel("Range [px]")
+    ax.set_ylabel("Azimuth [px]")
+
+    # =====================================================
+    # coherence profiles aligned to displayed image
+    # =====================================================
+
+    pos = ax.get_position()
+
+    prof_gap = 0.01
+    prof_w = 0.08
+    prof_h = 0.08 * pos.height
+
+    # -----------------------
+    # TOP coherence profile
+    # -----------------------
+
+    ax_top = fig.add_axes(
+        [
+            pos.x0,
+            pos.y1 + 0.003,
+            pos.width,
+            prof_h
+        ],
+        sharex=ax
+    )
+
+    ax_top.plot(
+        np.arange(nx),
+        coh_rg,
+        "k-",
+        lw=1
+    )
+
+    ax_top.set_ylim(0.5, 1.0)
+
+    ax_top.yaxis.tick_right()
+    ax_top.yaxis.set_label_position("right")
+    ax_top.set_ylabel("mean coh")
+
+    ax_top.tick_params(
+        axis="x",
+        bottom=False,
+        labelbottom=False
+    )
+
+    ax_top.spines["left"].set_visible(False)
+    ax_top.spines["top"].set_visible(False)
+
+    # -----------------------
+    # RIGHT coherence profile
+    # -----------------------
+
+    ax_right = fig.add_axes(
+        [
+            pos.x1 + prof_gap,
+            pos.y0,
+            prof_w,
+            pos.height
+        ],
+        sharey=ax
+    )
+
+    ycoord = np.linspace(
+        ax.get_ylim()[0],
+        ax.get_ylim()[1],
+        ny
+    )
+
+    ax_right.plot(
+        coh_az,
+        ycoord,
+        "k-",
+        lw=1
+    )
+
+    ax_right.set_xlim(0.5, 1.0)
+    ax_right.set_ylim(ax.get_ylim())
+
+    ax_right.set_xlabel("mean\ncoh")
+
+    ax_right.tick_params(
+        axis="y",
+        left=False,
+        labelleft=False
+    )
+
+    ax_right.spines["top"].set_visible(False)
+    ax_right.spines["right"].set_visible(False)
+
+    # -----------------------
+    # colorbar position
+    # -----------------------
+
+    if i == 0:
+        cb_x = pos.x1 + prof_gap + prof_w + 0.015
+        cb_y = pos.y0
+        cb_h = pos.height
+
+    y -= ax_h + gap
+
+# =========================================================
+# colorbar
+# =========================================================
+
+cax = fig.add_axes([
+    cb_x,
+    cb_y,
+    0.02,
+    cb_h
+])
+
+cb = fig.colorbar(
+    mappable,
+    cax=cax,
+    label="phase [rad]"
+)
+
+plt.show()
+
+
+
+####### option 2 - plot without coh avgs
+
+# fig = plt.figure(figsize=(8.5, 4))
+fig = plt.figure(figsize=(8.5, 8))
 mappable = None
 available_h = (top-bottom) - gap*(len(imgs)-1)
 y = top
 add_smaller = False
 
 for i, im in enumerate(imgs):
+    # coh
+    im_coh = imgs_coh[i]
+    coh_az = im_coh.mean(axis=1)  # one value per azimuth line
+    coh_rg = im_coh.mean(axis=0)  # one value per range sample
+    #
     h_frac = hs[i] / sum(hs)
     w_frac = ws[i] / max(ws)
     ax_h = available_h * h_frac
@@ -388,7 +619,41 @@ for i, im in enumerate(imgs):
     ax.yaxis.set_major_formatter(
         FuncFormatter(lambda y, pos: f"{y*dy:.0f}")
     )
-    if i == 1:
+    # coh
+    prof_gap = 0.015
+    prof_w = 0.10
+    #
+    ax_right = fig.add_axes([
+        left + ax_w + prof_gap,
+        y,
+        prof_w,
+        ax_h
+    ])
+    ax_right.plot(coh_az, np.arange(ny), 'k-')
+    ax_right.set_ylim(ny-1, 0)   # match imshow orientation
+    ax_right.set_xlabel('mean coherence')
+    ax_right.set_xlim(0.5, 1)
+    # only keep left y labels on the image
+    ax_right.set_yticklabels([])
+    #
+    # coh rg:
+    prof_h = 0.12
+    ax_bottom = fig.add_axes([
+        left,
+        y - prof_h - 0.01,
+        ax_w,
+        prof_h
+    ])
+    ax_bottom.plot(np.arange(nx), coh_rg, 'k-')
+    ax_bottom.set_xlim(0, nx-1)
+    ax_bottom.set_ylabel('mean coherence')
+    ax_right.set_ylim(0.5, 1)
+    # use same metre formatting
+    ax_bottom.xaxis.set_major_formatter(
+        FuncFormatter(lambda x, pos: f"{x*dx:.0f}")
+    )
+    ax_bottom.set_xlabel("Range [m]")
+    if i == 1 or len(imgs) == 1:
         ax.set_ylabel("Azimuth [px]")
     if i == len(imgs)-1:
         ax.set_xlabel("Range [px]")
@@ -400,11 +665,12 @@ cb = fig.colorbar(
     mappable,
     cax=cax,
     label = 'phase [rad]'
-    # label=r"$\sigma^0$ [dB]"
 )
-# cb.set_ticks([-22, -20, -15, -10, -5])
 
 plt.show()
+
+
+
 
 
 
