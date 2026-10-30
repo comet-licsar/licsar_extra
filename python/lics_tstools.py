@@ -274,17 +274,19 @@ def load_licsbas_cumh5_as_xrda(cumfile, dvars = ['cum','vel'] ):
     return out
 
 
-def correct_cum_from_tifs(cumhdfile, tifdir = 'GEOC.EPOCHS', ext='geo.iono.tif', tif_scale2mm = 1, sbovl=False ,outputhdf = None, directcorrect = True, newcumname = 'external_data'):
+def correct_cum_from_tifs(cumhdfile, tifdir = 'GEOC.EPOCHS', ext='geo.iono.tif', tif_scale2mm = 1,
+                          sbovl=False ,outputhdf = None, directcorrect = True, newcumname = ''):
     ''' This will load the cum.h5 and either correct cum layer (if directcorrect==True) or add new data var to the cube (if not directcorrect)
 
     Args:
         cumhdfile (str): input cum.h5 file
-        tifdir (str): where to find corrections. Must be in epoch subdirs, e.g. tifdir/20240216/20240216.ext
+        tifdir (str): where to find corrections. Can be either in that directory, or in epoch subdirs (e.g. tifdir/20240216/20240216.ext)
         ext (str):    what extension is used for the correction files after the epochdate, e.g. 'geo.iono.tif', 'tide.geo.tif'
         tif_scale2mm (float):  for iono [rad]: 55.465/(4*np.pi), for SET [m]: 1000, for sltd [rad] same as iono but opposite sign (real delay)
         outputhdf (str):   if None, will overwrite the input file, otherwise will export to this filename (functional: H5, NC, possibly: zarr)
         directcorrect (bool): if True, it will directly reduce the cum data, otherwise it stores it to the datacube
-    
+        sbovl (bool): not used...
+        newcumname (str): name of the new data_var (if empty string, it will auto-identify it)
     Returns:
         bool:  True if all went ok
     '''
@@ -309,11 +311,12 @@ def correct_cum_from_tifs(cumhdfile, tifdir = 'GEOC.EPOCHS', ext='geo.iono.tif',
         cumh.cum.values = cumxr.values
     else:
         codes = ['iono', 'tide', 'icams', 'sltd']
-        for c in codes:
-            if ext.find(c)>-1:
-                newcumname = c
+        if not newcumname:
+            for c in codes:
+                if ext.find(c)>-1:
+                    newcumname = c
         if newcumname in cumh:
-            # rename to extension
+            # rename to extension if already exists
             newcumname = ext
         if newcumname in cumh:
             print('WARNING, the layer "'+newcumname+'"already existed in the datacube! Will overwrite it now')
@@ -368,7 +371,7 @@ def cumcube_sbovl_remove_from_tifs(cumxr, tifdir = 'GEOC.EPOCHS', ext='geo.iono.
         
         try:
             if not os.path.exists(extif1) or not os.path.exists(extif2):
-                raise FileNotFoundError(f'File not found: {extif1} or {extif2}')
+                raise FileNotFoundError(f'File not found: {os.path.basename(extif1)} or {os.path.basename(extif2)}')
             #backward
             extepoch1 = load_tif2xr(extif1)
             extepoch1 = extepoch1.where(extepoch1 != 0) # just in case...
@@ -483,7 +486,7 @@ def cumcube_remove_from_tifs(cumxr, tifdir = 'GEOC.EPOCHS', ext='geo.iono.tif',t
         
         try:
             if not os.path.exists(extif):
-                raise FileNotFoundError(f'File not found: {extif}')
+                raise FileNotFoundError(f'File not found: {os.path.basename(extif)}')
             extepoch = load_tif2xr(extif)
             extepoch = extepoch.where(extepoch != 0) # just in case...
             extepoch = extepoch * tif_scale2mm
