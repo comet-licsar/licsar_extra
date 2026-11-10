@@ -8,7 +8,11 @@
 #
 ################################################################################
 
-from lics_unwrap import *
+try:
+    from lics_unwrap import *
+except:
+    from licsar_extra.lics_unwrap import *
+
 import re, os, glob
 from scipy.constants import speed_of_light
 #import datetime as dt
