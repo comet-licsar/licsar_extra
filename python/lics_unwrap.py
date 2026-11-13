@@ -78,7 +78,8 @@ else:
     print('snaphu detected at: ' + SNAPHU_EXE)
     # make sure the 'snaphu' command is available in PATH for all subprocess calls
     snaphudir = os.path.dirname(SNAPHU_EXE)
-    if os.path.dirname(shutil.which('snaphu')) != snaphudir:
+    which_exe = shutil.which('snaphu')
+    if which_exe is None or os.path.dirname(which_exe) != snaphudir:
         os.environ['PATH'] = snaphudir + os.pathsep + os.environ.get('PATH', '')
 
 
