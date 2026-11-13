@@ -14,7 +14,7 @@ setup(
     install_requires = ['numpy',
 'matplotlib','xarray','rioxarray','pandas',
 'scipy','astropy','scikit-learn','gdal-wheel>=3.4',
-'snaphu'],
+'geopandas','snaphu'],
     extras_require = {
         # optional speedups
         'optional': ['dask', 'pyinterp']
