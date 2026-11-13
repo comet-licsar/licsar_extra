@@ -1,9 +1,4 @@
-os
-glob
-shutil
-subprocess
-re
-time
+numpy
 matplotlib
 xarray
 rioxarray
@@ -11,5 +6,5 @@ pandas
 scipy
 astropy
 scikit-learn
-gdal>=2.4
-numpy<2.0
+gdal-wheel>=3.4
+snaphu

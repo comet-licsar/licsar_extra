@@ -1,0 +1,14 @@
+numpy
+matplotlib
+xarray
+rioxarray
+pandas
+scipy
+astropy
+scikit-learn
+gdal>=2.4
+snaphu
+
+[optional]
+dask
+pyinterp
