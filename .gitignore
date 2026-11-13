@@ -8,3 +8,7 @@
 __pycache__/
 lics_tstools_last.py
 trial
+*.egg-info/
+*.whl
+build/
+dist/
