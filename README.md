@@ -53,8 +53,9 @@ cohtif  = '20xxxxxx_20xxxxxx.coh.geo.tif'
 outunw  = '20xxxxxx_20xxxxxx.unw.geo.tif'
 unwcube = lics_unwrap.process_ifg_pair(phatif, cohtif,
         ml = 1, fillby = 'nearest', thres = 0.35,
-        lowpass = False, goldstein = True, specmag = True,
+        lowpass = False, goldstein = True,
         outtif = outunw, cascade = False)   # try cascade True/False, it has strong effect
+# unwcube['unw'].plot()
 ```
 
 Note: if `dask` and `pyinterp` are present, they will be used (optionally) to speed up processing.
@@ -66,5 +67,5 @@ Useful functions to operate with the LiCSBAS datacube.
 ### licsbas_mintpy_PMM.py
 
 Functionality directly imported from [MintPy](https://github.com/insarlab/MintPy), allowing LiCSBAS to
-calculate/correct a plate motion velocity plane — effectively fixing the solution towards the
-Eurasian tectonic plate.
+calculate/correct a plate motion velocity plane — effectively fixing the solution towards selected
+tectonic plate.
