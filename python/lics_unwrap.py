@@ -49,11 +49,38 @@ import glob
 
 
 
-# check if there is snaphu
-if os.system('which snaphu >/dev/null 2>/dev/null') != 0:
-    print('snaphu not detected. please install it yourself, e.g. from:')
-    print('https://web.stanford.edu/group/radar/softwareandlinks/sw/snaphu')
-    exit()
+def _find_snaphu():
+    """Locates the snaphu executable.
+
+    Looks first in PATH, then for the binary bundled with the 'snaphu' python
+    package (https://github.com/isce-framework/snaphu-py), which is installed
+    automatically as a dependency of licsar_extra.
+    """
+    exe = shutil.which('snaphu')
+    if exe is not None:
+        return exe
+    try:
+        import snaphu as snaphu_pkg
+        exe = os.path.join(os.path.dirname(os.path.abspath(snaphu_pkg.__file__)), 'snaphu')
+        if os.path.isfile(exe) and os.access(exe, os.X_OK):
+            return exe
+    except ImportError:
+        pass
+    return None
+
+SNAPHU_EXE = _find_snaphu()
+if SNAPHU_EXE is None:
+    print('snaphu not detected. please install it, e.g. with:')
+    print('  pip install snaphu')
+    print('or from source: https://web.stanford.edu/group/radar/softwareandlinks/sw/snaphu')
+    print('the unwrapping functions of lics_unwrap will not work without snaphu')
+else:
+    print('snaphu detected at: ' + SNAPHU_EXE)
+    # make sure the 'snaphu' command is available in PATH for all subprocess calls
+    snaphudir = os.path.dirname(SNAPHU_EXE)
+    which_exe = shutil.which('snaphu')
+    if which_exe is None or os.path.dirname(which_exe) != snaphudir:
+        os.environ['PATH'] = snaphudir + os.pathsep + os.environ.get('PATH', '')
 
 
 # avoid cv2 in ipynb
